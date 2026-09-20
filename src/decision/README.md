@@ -2,45 +2,62 @@
 
 Ownership: Developer B.
 
-This module receives `contracts.WorldState`, asks Jev for typed contextual judgments, and will map
-the result to `contracts.DecisionResult`. The interface must never receive SDK-specific objects.
+Este modulo recebe `contracts.WorldState`, envia apenas evidencias estruturadas ao Jev e converte
+a resposta do SDK em tipos proprios. O restante do projeto nunca deve receber objetos internos do
+SDK. A integracao usa Python e o pacote oficial `typesafe-sdk`.
 
-The official SDK targets JavaScript/TypeScript and uses `TYPESAFE_API_KEY`. The runtime-specific
-client and mapping are isolated under `jev/`; no service or database is introduced.
+## Estado atual
 
-Deterministic calculations stay in `features`. Decision policy may combine typed Jev judgments,
-but must distinguish insufficient evidence, low confidence, and API failure. Do not replace Jev
-with a large `if/else` classifier and do not claim model accuracy without labeled evaluation.
+`jev/JevWorldStateEvaluator` implementa a fronteira testavel:
 
-## Current prototype
-
-`jev/prototype.ts` provides one deliberately provisional `choice` question and a narrow client
-interface that can be replaced by a deterministic fake. Its output is `PrototypeJevOutput`, not
-the final `DecisionResult`; event, severity, urgency, action, question types, cadence, and policy
-remain intentionally undecided.
-
-Input fields use `null` for missing evidence. The adapter sends only the provided `worldState` and
-does not infer absent values.
-
-## Commands
-
-From `src/decision`:
-
-```powershell
-npm install
-npm test
-npm run typecheck
-npm run example:live
+```text
+WorldState
+  -> JSON com worldState
+  -> pergunta Choice provisoria
+  -> SDK Python do Jev
+  -> JevAssessment independente do SDK
 ```
 
-- `npm test` is fully offline and does not use the API key.
-- `npm run example:live` loads the repository root `.env`, sends one synthetic state to the real
-  API, and prints: input antes do SDK, body HTTP realmente enviado, body bruto recebido e output
-  mapeado. Headers nunca sao impressos, portanto a chave nao aparece no log.
+A pergunta atual distingue `no_clear_concern`, `concerning_interaction` e
+`insufficient_evidence`. Ela valida a integracao, mas ainda nao e um classificador calibrado de
+briga. Por isso o adapter ainda nao inventa um mapeamento definitivo para `DecisionResult`. Evento,
+severidade, urgencia, acao, politica de confianca e cadencia serao definidos com exemplos reais do
+MVP.
 
-O SDK retorna `input_tokens` e `output_tokens` como telemetria. A precificacao publica atual do
-Jev cobra tokens de entrada e informa output gratuito; a presenca de `output_tokens` em `usage`
-nao significa, por si so, cobranca por esses tokens.
+Falha da API, evidencia insuficiente e ausencia de preocupacao permanecem estados diferentes.
+Calculos deterministicos continuam em `features`; a decisao contextual pertence ao Jev.
 
-The live example proves connectivity and the adapter shape; it does not measure fight-detection
-accuracy or define the final MVP policy.
+## Instalacao
+
+Na raiz do repositorio:
+
+```powershell
+python -m pip install -e ".[dev,decision]"
+```
+
+O cliente le `TYPESAFE_API_KEY` do ambiente. O exemplo real carrega essa variavel do `.env` da
+raiz. Nunca versione nem imprima a chave.
+
+## Comandos
+
+```powershell
+# Testes offline: nao usam chave nem rede
+python -m pytest tests/decision
+
+# Demonstra exatamente a entrada, perguntas e saida usando uma resposta simulada
+python -m decision.examples.simulated
+
+# Faz uma chamada real e mostra o JSON HTTP enviado e recebido sem mostrar headers
+python -m decision.examples.live
+```
+
+O campo `usage.output_tokens` e telemetria retornada pela API. Sua presenca nao implica, sozinha,
+cobranca de tokens de saida.
+
+## Onde alterar depois
+
+- `jev/serialization.py`: formato JSON derivado de `WorldState`;
+- `jev/questions.py`: perguntas e criterios enviados ao modelo;
+- `jev/evaluator.py`: chamada do SDK e mapeamento da resposta;
+- `examples/`: demonstracoes offline e real;
+- `tests/decision/test_jev.py`: contrato e falhas do adapter.

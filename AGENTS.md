@@ -132,11 +132,13 @@ be mapped inside `src/decision/jev/`; the interface receives only `DecisionResul
 
 ## Technology boundaries
 
-- Python 3.11+ is the project language for contracts, perception, and feature extraction.
+- Python 3.11+ is the project language for contracts, perception, feature extraction, and the Jev
+  decision adapter. Do not reintroduce a separate Node.js runtime without an explicit reason.
 - Planned perception stack: Ultralytics YOLO26n-pose, ByteTrack, OpenCV, NumPy, and optionally
   Supervision.
-- Jev/TypeSafe integration belongs only under `src/decision/jev/`. Verify the installed SDK API
-  before coding; never expose `TYPESAFE_API_KEY` to a client or commit it.
+- Jev/TypeSafe integration belongs only under `src/decision/jev/`. Use the official Python SDK,
+  verify its installed API before coding, and never expose `TYPESAFE_API_KEY` to a client or
+  commit it.
 - Keep third-party types and imports inside their owning adapter.
 
 ## Implementation conventions

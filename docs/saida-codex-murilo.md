@@ -82,17 +82,17 @@ O repositório foi reorganizado para dois fluxos paralelos, com contratos mínim
   - Jev recebe WorldState; a interface recebe apenas DecisionResult.
   - FeaturePipeline.update() pode não produzir um estado em todos os frames.
   - DecisionEngine.decide() é assíncrono, preparando a chamada externa sem introduzir timers ou serviços agora.
-  - Não foi criado um SDK Python fictício para Jev. A documentação oficial atual apresenta SDK JavaScript/TypeScript, Node 20+ e TYPESAFE_API_KEY; a escolha do
-    menor adapter entre runtimes ficou conscientemente adiada. Documentação TypeSafe
+  - A camada Jev foi migrada para o SDK Python oficial `typesafe-sdk`. O adapter assíncrono recebe
+    `WorldState`, envia JSON tipado ao Jev e devolve um resultado independente do SDK.
 
   - A abordagem planejada de YOLO26n-pose com ByteTrack é suportada oficialmente pelo Ultralytics. Documentação de tracking
 
   ## Validação
 
-  - 5 testes passando.
+  - 22 testes passando.
   - Ruff sem problemas.
   - 35 arquivos Markdown verificados, sem links quebrados.
   - Nenhum diretório vazio em src/ ou tests/.
   - .gitignore cobre credenciais, vídeos, pesos, resultados do YOLO e artefatos locais.
-  - Apenas dependências leves de desenvolvimento foram instaladas; o pacote pesado de percepção não foi baixado.
+  - O SDK Python oficial do Jev foi instalado; o pacote pesado de percepção não foi baixado.
   - Nenhuma branch ou commit foi criado.

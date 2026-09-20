@@ -28,13 +28,12 @@ Detalhes: [arquitetura](docs/projeto/arquitetura.md) e [regras para agentes](AGE
 Requisitos atuais:
 
 - Python 3.11 ou superior;
-- Node.js 20 ou superior apenas quando a integracao oficial com Jev for implementada;
 - Git.
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install -e ".[dev]"
+python -m pip install -e ".[dev,decision]"
 Copy-Item .env.example .env
 python -m pytest
 ```
@@ -48,10 +47,17 @@ python -m pip install -e ".[dev,perception]"
 Pesos como `yolo26n-pose.pt` sao obtidos localmente pela ferramenta de visao e nao devem ser
 versionados. A chave do Jev deve existir somente no `.env` local.
 
-## Execucao
+## Execucao da camada Jev
 
-Ainda nao existe um entrypoint da aplicacao. Cada modulo deve documentar seu comando assim que
-possuir um fluxo executavel; nao mantenha comandos ficticios aqui.
+O fluxo completo da aplicacao ainda nao possui um entrypoint. A camada decisoria ja oferece uma
+simulacao offline e um exemplo real isolado:
+
+```powershell
+python -m decision.examples.simulated
+python -m decision.examples.live
+```
+
+O exemplo real le `TYPESAFE_API_KEY` do `.env`; os headers nunca sao impressos.
 
 ## Onde trabalhar
 

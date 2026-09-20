@@ -12,6 +12,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+decision = [
+  "python-dotenv>=1,<2",
+  "typesafe-sdk>=0.7,<0.8",
+]
 perception = [
   "opencv-python",
   "supervision",
