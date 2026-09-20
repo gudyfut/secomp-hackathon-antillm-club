@@ -30,15 +30,8 @@ Requisitos atuais:
 - Python 3.11 ou superior;
 - Git.
 
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -e ".[dev]"
-Copy-Item .env.example .env
-python -m pytest
-```
-
-Developer A instala tambem as dependencias de visao:
+Um unico comando cria `.venv`, instala perception, features, Jev e ferramentas de desenvolvimento,
+baixa e verifica o modelo oficial, prepara o `.env` local e roda os testes offline:
 
 ```powershell
 python scripts/setup.py
@@ -49,8 +42,29 @@ versionados. A chave do Jev deve existir somente no `.env` local.
 
 ## Execucao
 
-Ainda nao existe um entrypoint da aplicacao. Cada modulo deve documentar seu comando assim que
-possuir um fluxo executavel; nao mantenha comandos ficticios aqui.
+### Webcam ou video
+
+```powershell
+python scripts/run.py --source 0
+python scripts/run.py --source caminho\video.mp4
+```
+
+A janela mostra pose, bounding boxes, tracking ByteTrack, FPS e emissao de `WorldState`. O terminal
+mostra os estados emitidos pela `FeaturePipeline`. Pressione `q` ou Escape para encerrar.
+
+### Jev
+
+```powershell
+# Offline: nao usa chave, rede ou creditos
+.\.venv\Scripts\python.exe -m decision.examples.simulated
+
+# Real: le TYPESAFE_API_KEY do .env
+.\.venv\Scripts\python.exe -m decision.examples.live
+```
+
+O exemplo real mostra o JSON enviado e recebido, mas nunca imprime headers ou a chave. A pergunta
+atual e provisoria e valida a fronteira `WorldState -> JevAssessment`; ela ainda nao representa um
+classificador calibrado de briga nem produz o `DecisionResult` final do MVP.
 
 ## Onde trabalhar
 

@@ -16,10 +16,11 @@ These instructions apply to the whole repository.
 
 Before changing files:
 
-1. Read `README.md`, this file, and the README in the module you own.
+1. Read this file and inspect the code/tests directly related to the task.
 2. Inspect `git status`; preserve work already present.
-3. Read `src/contracts/README.md` before consuming or changing a contract.
-4. Keep facts, plans, and unverified assumptions distinct. Never invent results or evidence.
+3. Inspect contract source files before consuming or changing a shared contract.
+4. Read README files only for documentation/setup tasks or the final documentation pass.
+5. Keep facts, plans, and unverified assumptions distinct. Never invent results or evidence.
 
 ## Architecture and data flow
 
@@ -54,7 +55,6 @@ May normally modify:
 ```text
 src/perception/**
 tests/perception/**
-docs specific to perception
 ```
 
 May read:
@@ -81,7 +81,6 @@ src/features/**
 src/decision/**
 tests/features/**
 tests/decision/**
-docs specific to features/decision
 ```
 
 May read:
@@ -101,7 +100,6 @@ src/contracts/**
 src/interface/**
 tests/contracts/**
 global configuration files
-README.md and cross-cutting documentation
 ```
 
 These are shared areas. Changes must be minimal, intentional, justified, and coordinated. Do not
@@ -121,7 +119,7 @@ When a contract change is truly necessary:
 
 1. prefer backward compatibility;
 2. make the smallest possible change;
-3. update its documentation and synthetic fixtures;
+3. update synthetic fixtures and type-level comments when required for correctness;
 4. find and test every consumer;
 5. do not use it as an excuse to refactor another developer's module;
 6. communicate the change before merge.
@@ -140,6 +138,23 @@ be mapped inside `src/decision/jev/`; the interface receives only `DecisionResul
   verify its installed API before coding, and never expose `TYPESAFE_API_KEY` to a client or
   commit it.
 - Keep third-party types and imports inside their owning adapter.
+
+## Documentation freeze during implementation
+
+The current priority is making the system work on the developers' machines. During ordinary
+implementation tasks:
+
+- do not edit the root `README.md`, module README files, `docs/**`, delivery templates, setup
+  guides, resource-credit tables, or presentation material;
+- do not perform documentation cleanup, link checks, wording updates, or cross-cutting formatting;
+- do not update documentation merely because code, commands, dependencies, or behavior changed;
+- update source docstrings, type comments, and focused code comments only when they are necessary
+  to understand or safely use the code being changed;
+- change documentation only when the user explicitly requests it or during the final one-shot
+  documentation/delivery pass.
+
+Temporary documentation drift is accepted during active development. Record important final-pass
+facts in the task handoff rather than editing documentation opportunistically.
 
 ## Implementation conventions
 
@@ -160,7 +175,10 @@ be mapped inside `src/decision/jev/`; the interface receives only `DecisionResul
 - Decision tests must use synthetic `WorldState` values and a mocked/injected Jev client; offline
   tests validate integration logic, not model accuracy.
 - Contract changes require updates to `tests/contracts/` and `tests/fixtures/synthetic.py`.
-- Before handoff, run `python -m pytest` and any module-specific checks documented by that module.
+- Run the smallest relevant unit/integration tests for the code changed.
+- Do not reinstall dependencies, redownload models, exercise the full webcam flow, run the live
+  Jev API, or validate the clone/setup path for ordinary code changes. Do those only when the
+  change directly affects that path, the user explicitly asks, or at a final integration milestone.
 
 ## Git collaboration
 
@@ -191,5 +209,6 @@ Perception change plus one Feature/Decision change with shared files changed onl
 ## Definition of done
 
 A task is done when it respects ownership, consumes/produces the correct contract, has focused
-tests, documents configuration or limitations, credits external resources when added, and does
-not claim unverified behavior.
+tests, keeps the current development flow working for the changed module, and does not claim
+unverified behavior. Documentation completeness and full setup validation are final-pass concerns
+unless the task explicitly targets them.
