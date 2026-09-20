@@ -532,6 +532,51 @@ O ambiente usado na validação final continha Python 3.14, NumPy 2.5.3, PyTorch
 Torchvision 0.29.0+cu130, TypeSafe SDK 0.7.0, FastAPI 0.141.1 e Uvicorn 0.53.0. As restrições de
 instalação declaradas em `pyproject.toml` continuam sendo a referência para novas máquinas.
 
+## Transparência sobre Inteligência Artificial
+
+Este projeto usou IA em dois papéis diferentes, que não devem ser confundidos:
+
+### IA presente na solução
+
+- **YOLO26n-pose**, modelo pré-treinado executado localmente, detecta pessoas e poses;
+- **Jev, da TypeSafe**, recebe o `WorldState` estruturado e produz os julgamentos contextuais
+  tipados exibidos pelo painel;
+- nenhuma imagem é enviada ao Jev, e nenhum reconhecimento facial é realizado.
+
+### IA usada durante o desenvolvimento
+
+O **[OpenAI Codex](https://developers.openai.com/codex/)** foi usado como ferramenta de apoio ao
+desenvolvimento durante o hackathon. Ele auxiliou na leitura das orientações, organização do
+repositório, discussão da arquitetura, implementação e revisão de código, criação de testes,
+diagnóstico de erros, documentação e operações de Git solicitadas pela equipe.
+
+O Codex não faz parte da aplicação em execução e não toma decisões sobre as cenas analisadas. As
+decisões de produto, os requisitos e a aceitação do trabalho permaneceram com a equipe. As saídas
+foram verificadas por revisão do código e dos diffs, testes offline, Ruff e execuções manuais da
+câmera/interface. O uso da ferramenta acelera o desenvolvimento, mas pode introduzir erros; por
+isso, nenhuma sugestão deve ser tratada como correta sem validação humana.
+
+O registro detalhado está em [uso de IA](docs/entrega/uso-de-ia.md), e as bibliotecas, APIs,
+modelos e licenças estão listados em [recursos externos](docs/entrega/recursos-externos.md). O MVP
+não utilizou dataset externo nem treinamento de um novo modelo; os vídeos de teste são fornecidos
+localmente pelos usuários e não são versionados.
+
+## Aderência às orientações do Hackathon
+
+| Critério das orientações | Evidência no projeto |
+| --- | --- |
+| Entendimento e aderência | Problema universitário delimitado, público responsável, escopo e casos não aplicáveis |
+| Profundidade técnica | Pipeline completo, justificativa do uso de pose/tracking, contratos, limitações e stack creditada |
+| Execução técnica | Interface integrada, teste por câmera ou vídeo, diagnóstico por camada e suíte offline |
+| Apresentação da informação | Painel com overlays, métricas, evidências, decisão e estados de erro distintos |
+| Criatividade e inovação | Combinação de pose temporal local com julgamento tipado do Jev e alertas para revisão humana |
+| Pitch e dinâmica da equipe | Problema, solução, demo, decisões, limitações e futuro estão documentados para o roteiro |
+
+O README cobre os requisitos do repositório, explica a execução e fornece material para os seis
+critérios. A apresentação ao vivo, o limite de cinco minutos e a participação de todos os
+integrantes ainda precisam ser cumpridos e demonstrados pela equipe durante o pitch; nenhum arquivo
+do repositório pode comprovar esses três pontos sozinho.
+
 ## Licença
 
 O código do projeto está sob a [licença MIT](LICENSE). Modelos, datasets, vídeos e serviços externos
