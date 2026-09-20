@@ -1,50 +1,157 @@
-"""Conversion from stable project contracts to the JSON state consumed by Jev."""
+"""Validate and compact ``WorldState`` into the state consumed by Jev."""
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
-from contracts import WorldState
+from contracts import InteractionFeatures, PersonFeatures, WorldState
+
+_PERSON_FIELDS = (
+    "body_speed",
+    "wrist_speed",
+    "wrist_acceleration",
+    "motion_intensity",
+    "person_fallen",
+)
+_INTERACTION_FIELDS = (
+    "distance_between_people",
+    "rapid_approach",
+    "wrist_to_head_distance",
+    "wrist_to_torso_distance",
+    "bbox_overlap",
+    "possible_contact",
+    "interaction_duration_ms",
+    "repeated_aggressive_motion",
+)
+
+
+class WorldStatePayloadError(ValueError):
+    """Raised before an invalid or ambiguous state can be sent to Jev."""
+
+
+def _number(value: float | None, field: str, *, nonnegative: bool = True) -> float | None:
+    if value is None:
+        return None
+    if not math.isfinite(value):
+        raise WorldStatePayloadError(f"{field} must be finite")
+    if nonnegative and value < 0:
+        raise WorldStatePayloadError(f"{field} must be nonnegative")
+    return round(value, 4)
+
+
+def _person_json(person: PersonFeatures) -> dict[str, Any]:
+    return {
+        "track_id": person.track_id,
+        "body_speed_body_heights_per_second": _number(person.body_speed, "body_speed"),
+        "arm_motion_speed_body_heights_per_second": _number(person.wrist_speed, "wrist_speed"),
+        "arm_motion_acceleration_body_heights_per_second_squared": _number(
+            person.wrist_acceleration, "wrist_acceleration", nonnegative=False
+        ),
+        "motion_intensity_body_heights_per_second": _number(
+            person.motion_intensity, "motion_intensity"
+        ),
+        "person_fallen": person.person_fallen,
+    }
+
+
+def _interaction_json(interaction: InteractionFeatures) -> dict[str, Any]:
+    duration = interaction.interaction_duration_ms
+    if duration is not None and duration < 0:
+        raise WorldStatePayloadError("interaction_duration_ms must be nonnegative")
+    overlap = _number(interaction.bbox_overlap, "bbox_overlap")
+    if overlap is not None and overlap > 1:
+        raise WorldStatePayloadError("bbox_overlap must be between 0 and 1")
+    return {
+        "first_track_id": interaction.first_track_id,
+        "second_track_id": interaction.second_track_id,
+        "distance_between_people_body_heights": _number(
+            interaction.distance_between_people, "distance_between_people"
+        ),
+        "rapid_approach": interaction.rapid_approach,
+        # The current feature implementation calculates these in one direction.
+        "first_wrist_to_second_head_distance_body_heights": _number(
+            interaction.wrist_to_head_distance, "wrist_to_head_distance"
+        ),
+        "first_wrist_to_second_torso_distance_body_heights": _number(
+            interaction.wrist_to_torso_distance, "wrist_to_torso_distance"
+        ),
+        "bounding_box_iou": overlap,
+        "possible_contact": interaction.possible_contact,
+        "interaction_duration_ms": duration,
+        "repeated_aggressive_motion": interaction.repeated_aggressive_motion,
+    }
+
+
+def _validate_structure(world_state: WorldState) -> None:
+    if world_state.window_end_ms < world_state.window_start_ms:
+        raise WorldStatePayloadError("window_end_ms must not precede window_start_ms")
+
+    track_ids = [person.track_id for person in world_state.people]
+    if len(track_ids) != len(set(track_ids)):
+        raise WorldStatePayloadError("people must have unique track_id values")
+    known_tracks = set(track_ids)
+
+    pairs: set[tuple[int, int]] = set()
+    for interaction in world_state.interactions:
+        first = interaction.first_track_id
+        second = interaction.second_track_id
+        if first == second:
+            raise WorldStatePayloadError("an interaction cannot reference the same track twice")
+        if first not in known_tracks or second not in known_tracks:
+            raise WorldStatePayloadError("interactions must reference tracks present in people")
+        pair = tuple(sorted((first, second)))
+        if pair in pairs:
+            raise WorldStatePayloadError("each track pair may appear only once")
+        pairs.add(pair)
 
 
 def world_state_to_json(world_state: WorldState) -> dict[str, Any]:
-    """Serialize a ``WorldState`` without leaking Python or SDK-specific objects."""
+    """Create a deterministic, compact payload with explicit units and null semantics."""
+
+    _validate_structure(world_state)
+    people = sorted(world_state.people, key=lambda person: person.track_id)
+    interactions = sorted(
+        world_state.interactions,
+        key=lambda item: (item.first_track_id, item.second_track_id),
+    )
+    available_person = sum(
+        getattr(person, field) is not None for person in people for field in _PERSON_FIELDS
+    )
+    available_interaction = sum(
+        getattr(interaction, field) is not None
+        for interaction in interactions
+        for field in _INTERACTION_FIELDS
+    )
+    possible = len(people) * len(_PERSON_FIELDS) + len(interactions) * len(_INTERACTION_FIELDS)
+    available = available_person + available_interaction
 
     return {
-        "source_id": world_state.source_id,
-        "observed_at_ms": world_state.observed_at_ms,
-        "window_start_ms": world_state.window_start_ms,
-        "window_end_ms": world_state.window_end_ms,
-        "people": [
-            {
-                "track_id": person.track_id,
-                "body_speed": person.body_speed,
-                "wrist_speed": person.wrist_speed,
-                "wrist_acceleration": person.wrist_acceleration,
-                "motion_intensity": person.motion_intensity,
-                "person_fallen": person.person_fallen,
-            }
-            for person in world_state.people
-        ],
-        "interactions": [
-            {
-                "first_track_id": interaction.first_track_id,
-                "second_track_id": interaction.second_track_id,
-                "distance_between_people": interaction.distance_between_people,
-                "rapid_approach": interaction.rapid_approach,
-                "wrist_to_head_distance": interaction.wrist_to_head_distance,
-                "wrist_to_torso_distance": interaction.wrist_to_torso_distance,
-                "bbox_overlap": interaction.bbox_overlap,
-                "possible_contact": interaction.possible_contact,
-                "interaction_duration_ms": interaction.interaction_duration_ms,
-                "repeated_aggressive_motion": interaction.repeated_aggressive_motion,
-            }
-            for interaction in world_state.interactions
-        ],
+        "schema_version": "world-state.jev.v1",
+        "observation_window": {
+            "duration_ms": world_state.window_end_ms - world_state.window_start_ms,
+        },
+        "summary": {
+            "people_count": len(people),
+            "interaction_count": len(interactions),
+            "available_signal_count": available,
+            "possible_signal_count": possible,
+            "signal_coverage": round(available / possible, 4) if possible else 0.0,
+        },
+        "semantics": {
+            "null": "unknown_or_not_computable; never assume zero or false",
+            "distances": "normalized by body/bounding-box scale; smaller means closer",
+            "speeds": "normalized body heights per second",
+            "acceleration": "normalized body heights per second squared; may be negative",
+            "bounding_box_iou": "0 means no overlap; 1 means complete overlap",
+            "booleans": "deterministic evidence flags, not final incident judgments",
+        },
+        "people": [_person_json(person) for person in people],
+        "interactions": [_interaction_json(interaction) for interaction in interactions],
     }
 
 
 def build_jev_state(world_state: WorldState) -> dict[str, Any]:
-    """Build the named state envelope referenced by the provisional question."""
+    """Build the named state envelope referenced by all MVP questions."""
 
-    return {"worldState": world_state_to_json(world_state)}
+    return {"world_state": world_state_to_json(world_state)}

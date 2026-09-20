@@ -14,7 +14,7 @@ from typesafe_sdk import (
 )
 
 from decision.examples.common import make_example_world_state, print_json
-from decision.jev import JevWorldStateEvaluator
+from decision.jev import JevDecisionEngine
 
 
 class SimulatedJevClient:
@@ -38,24 +38,34 @@ class SimulatedJevClient:
         return SystemOneResponse(
             model="jev-simulated",
             answers={
-                "assessment": ChoiceAnswer(
-                    choice="concerning_interaction",
+                "evidence_quality": ChoiceAnswer(
+                    choice="SUFFICIENT",
+                    confidence=0.92,
+                    probabilities={"SUFFICIENT": 0.92, "INSUFFICIENT": 0.08},
+                ),
+                "event": ChoiceAnswer(
+                    choice="SUSPICIOUS_INTERACTION",
                     confidence=0.82,
-                    probabilities={
-                        "no_clear_concern": 0.08,
-                        "concerning_interaction": 0.82,
-                        "insufficient_evidence": 0.10,
-                    },
-                )
+                    probabilities={"SUSPICIOUS_INTERACTION": 0.82, "FIGHT": 0.18},
+                ),
+                "severity": ChoiceAnswer(
+                    choice="MEDIUM", confidence=0.75, probabilities={"MEDIUM": 0.75}
+                ),
+                "urgency": ChoiceAnswer(
+                    choice="MEDIUM", confidence=0.78, probabilities={"MEDIUM": 0.78}
+                ),
+                "action": ChoiceAnswer(
+                    choice="MONITOR", confidence=0.8, probabilities={"MONITOR": 0.8}
+                ),
             },
-            usage=Usage(input_tokens=25, output_tokens=4),
+            usage=Usage(input_tokens=120, output_tokens=15),
         )
 
 
 async def main() -> None:
     world_state = make_example_world_state()
     client = SimulatedJevClient()
-    evaluator = JevWorldStateEvaluator(client)
+    evaluator = JevDecisionEngine(client)
 
     print_json("1. WORLDSTATE RECEBIDO", world_state)
     result = await evaluator.evaluate(world_state)

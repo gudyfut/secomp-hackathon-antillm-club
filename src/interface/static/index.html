@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Campus Sentinel</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #071019; --panel: #0d1925; --panel2: #111f2d; --line: #223447;
+      --text: #e8f0f8; --muted: #8ea2b5; --cyan: #52d5ff; --green: #42d392;
+      --amber: #ffbf47; --red: #ff5c67; --shadow: 0 20px 50px rgba(0,0,0,.32);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; font: 14px/1.5 Inter, ui-sans-serif, system-ui, sans-serif;
+      color: var(--text); background: radial-gradient(circle at 15% -10%, #12395a 0, transparent 35%), var(--bg); }
+    button, input { font: inherit; }
+    .shell { width: min(1500px, calc(100% - 32px)); margin: 0 auto; padding: 22px 0 40px; }
+    header { display:flex; justify-content:space-between; align-items:center; gap:20px; margin-bottom:18px; }
+    .brand { display:flex; align-items:center; gap:13px; }
+    .mark { width:42px; height:42px; border-radius:13px; display:grid; place-items:center;
+      background:linear-gradient(145deg,#45d8ff,#326cff); box-shadow:0 0 30px #36a9ff55; font-size:22px; }
+    h1 { font-size:20px; margin:0; letter-spacing:.02em; } .subtitle { color:var(--muted); font-size:12px; }
+    .status { display:flex; align-items:center; gap:8px; color:var(--muted); padding:8px 12px;
+      border:1px solid var(--line); border-radius:999px; background:#091520aa; }
+    .dot { width:8px; height:8px; border-radius:50%; background:#607080; }
+    .dot.live { background:var(--green); box-shadow:0 0 12px var(--green); }
+    .toolbar { display:flex; flex-wrap:wrap; gap:10px; padding:14px; border:1px solid var(--line);
+      background:#0b1722cc; border-radius:16px; margin-bottom:16px; box-shadow:var(--shadow); }
+    .btn { border:1px solid var(--line); color:var(--text); background:#142536; padding:10px 15px;
+      border-radius:10px; cursor:pointer; transition:.18s ease; }
+    .btn:hover { transform:translateY(-1px); border-color:#3b5c78; } .btn.primary { background:#167da7; border-color:#249fcf; }
+    .btn.danger { color:#ffc5ca; } .btn:disabled { opacity:.45; cursor:not-allowed; transform:none; }
+    .select { border:1px solid var(--line); color:var(--text); background:#142536; padding:10px 12px; border-radius:10px; }
+    input[type=file] { display:none; }
+    .grid { display:grid; grid-template-columns:minmax(0, 1.65fr) minmax(330px,.75fr); gap:16px; }
+    .panel { border:1px solid var(--line); background:linear-gradient(160deg,var(--panel),#09141e);
+      border-radius:16px; overflow:hidden; box-shadow:var(--shadow); }
+    .panel-head { padding:12px 15px; border-bottom:1px solid var(--line); display:flex;
+      justify-content:space-between; align-items:center; color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.08em; }
+    .stage { position:relative; min-height:540px; display:grid; place-items:center; background:#03070b; }
+    #videoWrap { position:relative; width:100%; max-height:72vh; display:none; }
+    #sourceVideo { display:block; width:100%; height:100%; object-fit:contain; }
+    #overlayCanvas { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+    #captureCanvas { display:none; }
+    .empty { text-align:center; color:var(--muted); max-width:390px; padding:35px; }
+    .empty .icon { font-size:46px; margin-bottom:8px; }
+    .hud { position:absolute; left:14px; bottom:14px; display:flex; gap:8px; flex-wrap:wrap; }
+    .chip { padding:6px 9px; border-radius:8px; background:#071019dc; border:1px solid #29445d; font:12px ui-monospace, monospace; }
+    .side { display:grid; gap:16px; align-content:start; }
+    .alert { min-height:145px; padding:20px; border-left:5px solid #526273; transition:.25s; }
+    .alert.safe { border-color:var(--green); background:linear-gradient(130deg,#0c2b23,#0d1925); }
+    .alert.warning { border-color:var(--amber); background:linear-gradient(130deg,#35280e,#0d1925); }
+    .alert.danger { border-color:var(--red); background:linear-gradient(130deg,#3c151a,#0d1925); animation:pulse 1.2s infinite alternate; }
+    @keyframes pulse { to { box-shadow:0 0 34px #ff5c6733; } }
+    .alert-kicker { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.12em; }
+    .alert h2 { margin:8px 0 4px; font-size:21px; } .alert p { color:var(--muted); margin:0; }
+    .metrics { display:grid; grid-template-columns:repeat(3,1fr); }
+    .metric { padding:14px; text-align:center; border-right:1px solid var(--line); }
+    .metric:last-child { border:0; } .metric strong { display:block; font-size:19px; color:var(--cyan); }
+    .metric span { color:var(--muted); font-size:10px; text-transform:uppercase; }
+    .decision-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:14px; }
+    .decision-item { background:#0a1520; border:1px solid var(--line); border-radius:10px; padding:9px; }
+    .decision-item span { color:var(--muted); display:block; font-size:10px; text-transform:uppercase; }
+    .decision-item strong { font-size:12px; word-break:break-word; }
+    .logs { grid-column:1 / -1; }
+    .tabs { display:flex; gap:4px; padding:8px; border-bottom:1px solid var(--line); }
+    .tab { padding:7px 11px; color:var(--muted); border:0; background:transparent; cursor:pointer; border-radius:7px; }
+    .tab.active { color:var(--text); background:#183047; }
+    .logbody { height:250px; overflow:auto; padding:13px; font:12px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace; white-space:pre-wrap; color:#b9c9d8; }
+    .logline { border-bottom:1px solid #172635; padding:5px 0; } .time { color:#57728b; }
+    .hidden { display:none !important; } .note { margin-left:auto; color:var(--muted); align-self:center; font-size:12px; }
+    @media(max-width:980px){ .grid{grid-template-columns:1fr}.stage{min-height:390px}.logs{grid-column:auto}.note{width:100%;margin:0} }
+  </style>
+</head>
+<body>
+<main class="shell">
+  <header>
+    <div class="brand"><div class="mark">◉</div><div><h1>Campus Sentinel</h1><div class="subtitle">Detecção inteligente de ocorrências · MVP local</div></div></div>
+    <div class="status"><span id="statusDot" class="dot"></span><span id="statusText">Aguardando fonte</span></div>
+  </header>
+
+  <section class="toolbar">
+    <button id="cameraBtn" class="btn primary">▶ Usar câmera</button>
+    <label for="fileInput" class="btn">＋ Anexar vídeo</label>
+    <input id="fileInput" type="file" accept="video/*">
+    <button id="stopBtn" class="btn danger" disabled>■ Encerrar</button>
+    <button id="soundBtn" class="btn">🔕 Alertas sonoros: OFF</button>
+    <select id="profileSelect" class="select" title="Equilíbrio entre velocidade e precisão">
+      <option value="speed">Velocidade</option>
+      <option value="balanced" selected>Equilibrado · recomendado</option>
+      <option value="precision">Precisão</option>
+    </select>
+    <span class="note">Reprodução em 1×; se a IA estiver ocupada, ela recebe o frame mais recente sem atrasar o vídeo.</span>
+  </section>
+
+  <div class="grid">
+    <section class="panel">
+      <div class="panel-head"><span>Visão computacional · YOLO Pose + ByteTrack</span><span id="sourceLabel">sem fonte</span></div>
+      <div class="stage">
+        <div id="empty" class="empty"><div class="icon">⌁</div><strong>Selecione uma fonte para iniciar</strong><br>Use a câmera em tempo real ou anexe um vídeo do dispositivo.</div>
+        <div id="videoWrap">
+          <video id="sourceVideo" muted playsinline></video>
+          <canvas id="overlayCanvas"></canvas>
+        </div>
+        <canvas id="captureCanvas"></canvas>
+        <div class="hud"><span id="frameChip" class="chip">frame —</span><span id="personChip" class="chip">0 pessoas</span><span id="jevChip" class="chip">Jev aguardando</span></div>
+      </div>
+    </section>
+
+    <aside class="side">
+      <section id="alertPanel" class="panel alert unknown">
+        <div class="alert-kicker">Estado da ocorrência</div>
+        <h2 id="alertHeadline">Aguardando análise</h2>
+        <p id="alertDetail">Inicie uma fonte de vídeo para receber avaliações.</p>
+      </section>
+      <section class="panel">
+        <div class="panel-head">Telemetria ao vivo</div>
+        <div class="metrics">
+          <div class="metric"><strong id="fpsMetric">—</strong><span>FPS da IA</span></div>
+          <div class="metric"><strong id="latencyMetric">—</strong><span>Inferência</span></div>
+          <div class="metric"><strong id="coverageMetric">—</strong><span>Sinais</span></div>
+        </div>
+        <div class="decision-grid">
+          <div class="decision-item"><span>Evento</span><strong id="eventValue">—</strong></div>
+          <div class="decision-item"><span>Confiança</span><strong id="confidenceValue">—</strong></div>
+          <div class="decision-item"><span>Severidade</span><strong id="severityValue">—</strong></div>
+          <div class="decision-item"><span>Urgência</span><strong id="urgencyValue">—</strong></div>
+          <div class="decision-item"><span>Ação</span><strong id="actionValue">—</strong></div>
+          <div class="decision-item"><span>Modelo</span><strong id="modelValue">—</strong></div>
+        </div>
+      </section>
+    </aside>
+
+    <section class="panel logs">
+      <div class="panel-head"><span>Observabilidade</span><span>sem dados sensíveis</span></div>
+      <div class="tabs">
+        <button class="tab active" data-target="activityLog">Atividade</button>
+        <button class="tab" data-target="worldLog">WorldState</button>
+        <button class="tab" data-target="jevInputLog">Entrada Jev</button>
+        <button class="tab" data-target="jevOutputLog">Saída Jev</button>
+      </div>
+      <div id="activityLog" class="logbody"></div>
+      <pre id="worldLog" class="logbody hidden">Nenhum WorldState emitido.</pre>
+      <pre id="jevInputLog" class="logbody hidden">Nenhuma requisição ao Jev.</pre>
+      <pre id="jevOutputLog" class="logbody hidden">Nenhuma resposta do Jev.</pre>
+    </section>
+  </div>
+</main>
+<script>
+  const $ = id => document.getElementById(id);
+  const video = $('sourceVideo'), canvas = $('captureCanvas'), ctx = canvas.getContext('2d');
+  const overlay = $('overlayCanvas'), overlayCtx = overlay.getContext('2d');
+  let socket = null, stream = null, running = false, ready = false, waiting = false;
+  let sourceMode = null, soundEnabled = false, lastFrameAt = 0, startedAt = 0, lastDangerAt = 0, frameIntervals = [];
+  let sourceEnded = false, decisionPending = false, finishTimer = null;
+
+  function log(message, kind='info') {
+    const row = document.createElement('div'); row.className = 'logline';
+    row.innerHTML = `<span class="time">${new Date().toLocaleTimeString()}</span> [${kind}] ${escapeHtml(message)}`;
+    $('activityLog').prepend(row); while ($('activityLog').children.length > 120) $('activityLog').lastChild.remove();
+  }
+  function escapeHtml(value) { const d=document.createElement('div'); d.textContent=String(value); return d.innerHTML; }
+  function pretty(value) { return JSON.stringify(value, null, 2); }
+  function setStatus(text, live=false) { $('statusText').textContent=text; $('statusDot').classList.toggle('live',live); }
+
+  async function startCamera() {
+    stopSession();
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({video:{width:{ideal:1280},height:{ideal:720}},audio:false});
+      video.srcObject=stream; video.loop=false; await video.play(); startSession('camera','Câmera do dispositivo');
+    } catch (e) { setStatus('Câmera indisponível'); log(e.message,'erro'); }
+  }
+  async function startFile(file) {
+    stopSession(); if (!file) return;
+    video.srcObject=null; video.src=URL.createObjectURL(file); video.loop=false; video.playbackRate=1;
+    try {
+      await new Promise((resolve,reject)=>{
+        if(video.readyState>=1){resolve();return;}
+        video.onloadedmetadata=resolve;
+        video.onerror=()=>reject(new Error('O navegador não conseguiu abrir este vídeo.'));
+        video.load();
+      });
+      video.currentTime=0; startSession('video',file.name);
+    } catch(e) { setStatus('Vídeo indisponível'); log(e.message,'erro'); stopSession(); }
+  }
+  function startSession(mode,label) {
+    sourceMode=mode; running=true; ready=false; waiting=false; sourceEnded=false; decisionPending=false;
+    startedAt=performance.now(); frameIntervals=[];
+    $('sourceLabel').textContent=label; $('stopBtn').disabled=false; $('cameraBtn').disabled=true;
+    $('profileSelect').disabled=true; $('empty').classList.add('hidden'); $('videoWrap').style.display='block';
+    $('videoWrap').style.aspectRatio=`${video.videoWidth||16} / ${video.videoHeight||9}`; setStatus('Conectando…');
+    const protocol=location.protocol==='https:'?'wss':'ws'; socket=new WebSocket(`${protocol}://${location.host}/ws/analyze`);
+    socket.onopen=()=>socket.send(JSON.stringify({type:'start',source:mode,profile:$('profileSelect').value}));
+    socket.onmessage=event=>handleMessage(JSON.parse(event.data));
+    socket.onerror=()=>{ setStatus('Erro de conexão'); log('Falha no WebSocket','erro'); };
+    socket.onclose=()=>{ if(running){setStatus('Conexão encerrada'); log('Servidor encerrou a sessão','aviso');} };
+    log(`Fonte iniciada: ${label}`);
+  }
+  function stopSession() {
+    running=false; ready=false; waiting=false; sourceEnded=false; decisionPending=false;
+    if(finishTimer){clearTimeout(finishTimer);finishTimer=null;}
+    if(socket && socket.readyState===WebSocket.OPEN){socket.send(JSON.stringify({type:'stop'}));socket.close();}
+    socket=null; if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
+    video.pause(); video.srcObject=null; if(video.src){URL.revokeObjectURL(video.src);video.removeAttribute('src');}
+    $('stopBtn').disabled=true; $('cameraBtn').disabled=false; $('profileSelect').disabled=false; $('sourceLabel').textContent='sem fonte';
+    $('videoWrap').style.display='none'; overlayCtx.clearRect(0,0,overlay.width,overlay.height); $('empty').classList.remove('hidden'); setStatus('Aguardando fonte');
+  }
+  function finishVideoWhenIdle() {
+    if(sourceMode!=='video'||!sourceEnded||waiting||decisionPending||finishTimer)return;
+    finishTimer=setTimeout(()=>{
+      finishTimer=null;
+      if(running&&sourceEnded&&!waiting&&!decisionPending){log('Análise do vídeo concluída');stopSession();}
+    },600);
+  }
+  function captureNext() {
+    if(!running||!ready||waiting||!socket||socket.readyState!==WebSocket.OPEN) return;
+    if(video.readyState<2){setTimeout(captureNext,80);return;}
+    const limits={speed:640,balanced:720,precision:960}, max=limits[$('profileSelect').value];
+    const ratio=Math.min(1,max/video.videoWidth); canvas.width=Math.round(video.videoWidth*ratio); canvas.height=Math.round(video.videoHeight*ratio);
+    ctx.drawImage(video,0,0,canvas.width,canvas.height); waiting=true;
+    const timestamp=sourceMode==='video'?Math.round(video.currentTime*1000):Math.round(performance.now()-startedAt);
+    canvas.toBlob(async blob=>{ if(!blob||!running){waiting=false;return;} socket.send(JSON.stringify({type:'frame_meta',timestamp_ms:timestamp})); socket.send(await blob.arrayBuffer()); },'image/jpeg',.72);
+  }
+  async function handleMessage(msg) {
+    if(msg.type==='status') {
+      setStatus(msg.message,msg.stage==='ready'); log(msg.message);
+      if(msg.stage==='ready'){
+        ready=true;$('jevChip').textContent=msg.jev_enabled?'Jev ativo':'Jev desativado';log(`Inferência: ${msg.compute} · ${msg.inference_size}px`);
+        if(sourceMode==='video'){
+          try { await video.play(); } catch(e) { log(`Não foi possível reproduzir o vídeo: ${e.message}`,'erro'); stopSession(); return; }
+        }
+        captureNext();
+      }
+    } else if(msg.type==='frame') {
+      drawOverlay(msg.overlay); $('frameChip').textContent=`frame ${msg.frame_index}`;
+      $('personChip').textContent=`${msg.people_count} pessoa${msg.people_count===1?'':'s'}`; $('latencyMetric').textContent=`${msg.inference_ms} ms`;
+      const now=performance.now(); if(lastFrameAt){frameIntervals.push(now-lastFrameAt);if(frameIntervals.length>15)frameIntervals.shift();$('fpsMetric').textContent=(1000/(frameIntervals.reduce((a,b)=>a+b,0)/frameIntervals.length)).toFixed(1);} lastFrameAt=now;
+      if(msg.world_state){$('worldLog').textContent=pretty(msg.world_state); updateCoverage(msg.world_state); log(`WorldState ${msg.world_state.observed_at_ms} ms · ${msg.world_state.people.length} pessoa(s)`);}
+      waiting=false; requestAnimationFrame(captureNext); finishVideoWhenIdle();
+    } else if(msg.type==='decision_started') {
+      decisionPending=true; if(finishTimer){clearTimeout(finishTimer);finishTimer=null;}
+      $('jevChip').textContent='Jev analisando…'; log(`Jev recebeu WorldState de ${msg.observed_at_ms} ms`,'jev');
+    } else if(msg.type==='decision') {
+      decisionPending=false;
+      $('jevChip').textContent='Jev respondeu'; $('jevInputLog').textContent=pretty(msg.jev_input); $('jevOutputLog').textContent=pretty(msg.assessment);
+      applyDecision(msg); log(`${msg.headline} · ${msg.assessment.status}`,'decisão'); finishVideoWhenIdle();
+    } else if(msg.type==='decision_error') {
+      decisionPending=false;
+      $('jevChip').textContent='Erro no Jev'; $('jevOutputLog').textContent=pretty(msg); log(msg.message,'erro Jev');
+      $('alertDetail').textContent='A visão continua funcionando; a última chamada ao Jev falhou.'; finishVideoWhenIdle();
+    } else if(msg.type==='frame_error') { waiting=false; log(msg.message,'erro de frame'); setTimeout(captureNext,120); finishVideoWhenIdle();
+    } else if(msg.type==='fatal') { log(msg.message,'fatal'); stopSession(); setStatus('Falha'); }
+  }
+  const skeleton=[['nose','left_eye'],['nose','right_eye'],['left_eye','left_ear'],['right_eye','right_ear'],['left_shoulder','right_shoulder'],['left_shoulder','left_elbow'],['left_elbow','left_wrist'],['right_shoulder','right_elbow'],['right_elbow','right_wrist'],['left_shoulder','left_hip'],['right_shoulder','right_hip'],['left_hip','right_hip'],['left_hip','left_knee'],['left_knee','left_ankle'],['right_hip','right_knee'],['right_knee','right_ankle']];
+  function drawOverlay(data) {
+    overlay.width=data.width; overlay.height=data.height; overlayCtx.clearRect(0,0,overlay.width,overlay.height);
+    const line=Math.max(2,data.width/400); overlayCtx.lineWidth=line; overlayCtx.font=`bold ${Math.max(13,data.width/55)}px ui-monospace`;
+    data.persons.forEach(person=>{
+      const color=`hsl(${(person.track_id*67)%360} 92% 62%)`, points={};
+      person.keypoints.forEach(p=>{if((p.confidence===null||p.confidence>=.35)&&p.x>0&&p.y>0)points[p.name]=p;});
+      overlayCtx.strokeStyle=color; overlayCtx.fillStyle=color; overlayCtx.lineCap='round';
+      skeleton.forEach(([a,b])=>{if(points[a]&&points[b]){overlayCtx.beginPath();overlayCtx.moveTo(points[a].x,points[a].y);overlayCtx.lineTo(points[b].x,points[b].y);overlayCtx.stroke();}});
+      Object.values(points).forEach(p=>{overlayCtx.beginPath();overlayCtx.arc(p.x,p.y,line*1.35,0,Math.PI*2);overlayCtx.fill();});
+      const b=person.bbox; overlayCtx.strokeRect(b.x_min,b.y_min,b.x_max-b.x_min,b.y_max-b.y_min);
+      const label=`ID ${person.track_id} · ${Math.round(person.confidence*100)}%`, textWidth=overlayCtx.measureText(label).width;
+      overlayCtx.fillRect(b.x_min,Math.max(0,b.y_min-26),textWidth+12,25); overlayCtx.fillStyle='#071019'; overlayCtx.fillText(label,b.x_min+6,Math.max(18,b.y_min-7));
+    });
+  }
+  function updateCoverage(ws) {
+    const vals=[]; ws.people.forEach(p=>Object.entries(p).forEach(([k,v])=>{if(k!=='track_id') vals.push(v)}));
+    ws.interactions.forEach(p=>Object.entries(p).forEach(([k,v])=>{if(!k.endsWith('track_id')) vals.push(v)}));
+    $('coverageMetric').textContent=vals.length?`${Math.round(100*vals.filter(v=>v!==null).length/vals.length)}%`:'—';
+  }
+  function applyDecision(msg) {
+    const a=msg.assessment,d=a.decision,p=$('alertPanel'); p.className=`panel alert ${msg.alert_level}`;
+    $('alertHeadline').textContent=msg.headline; $('alertDetail').textContent=d?`${d.event} · ação recomendada: ${d.action}`:'O Jev não encontrou sinais suficientes para uma decisão segura.';
+    $('eventValue').textContent=d?.event??'—'; $('confidenceValue').textContent=a.event?`${Math.round(a.event.confidence*100)}%`:'—';
+    $('severityValue').textContent=d?.severity??'—'; $('urgencyValue').textContent=d?.urgency??'—'; $('actionValue').textContent=d?.action??'—'; $('modelValue').textContent=a.model??'—';
+    if(msg.alert_level==='danger') notifyDanger(msg.headline,d.event);
+  }
+  function notifyDanger(title,event) {
+    const now=Date.now(); if(now-lastDangerAt<5000)return; lastDangerAt=now;
+    if(soundEnabled){const ac=new AudioContext();const osc=ac.createOscillator(),gain=ac.createGain();osc.frequency.value=880;gain.gain.value=.12;osc.connect(gain).connect(ac.destination);osc.start();setTimeout(()=>{osc.stop();ac.close()},450);}
+    if(soundEnabled&&'Notification'in window&&Notification.permission==='granted') new Notification(title,{body:`Evento: ${event}`});
+  }
+  $('cameraBtn').onclick=startCamera; $('stopBtn').onclick=stopSession;
+  $('fileInput').onchange=e=>startFile(e.target.files[0]);
+  video.onended=()=>{ if(sourceMode==='video'){sourceEnded=true;ready=false;setStatus('Finalizando análise…',true);log('Fim da reprodução; aguardando a análise pendente');finishVideoWhenIdle();} };
+  $('soundBtn').onclick=async()=>{soundEnabled=!soundEnabled;if(soundEnabled&&'Notification'in window&&Notification.permission==='default')await Notification.requestPermission();$('soundBtn').textContent=soundEnabled?'🔔 Alertas sonoros: ON':'🔕 Alertas sonoros: OFF';};
+  document.querySelectorAll('.tab').forEach(tab=>tab.onclick=()=>{document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));tab.classList.add('active');document.querySelectorAll('.logbody').forEach(x=>x.classList.add('hidden'));$(tab.dataset.target).classList.remove('hidden');});
+  window.addEventListener('beforeunload',stopSession);
+</script>
+</body>
+</html>

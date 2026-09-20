@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 from typesafe_sdk import AsyncTypeSafeClient
 
 from decision.examples.common import make_example_world_state, print_json
-from decision.jev import JevWorldStateEvaluator
+from decision.jev import JevDecisionEngine
 
 
 def _decode_json(raw: bytes) -> Any:
@@ -53,7 +53,7 @@ async def main() -> None:
         event_hooks={"request": [_log_request], "response": [_log_response]}
     ) as http_client:
         client = AsyncTypeSafeClient(http_client=http_client)
-        evaluator = JevWorldStateEvaluator(client)
+        evaluator = JevDecisionEngine(client)
         result = await evaluator.evaluate(world_state)
 
     print_json("OUTPUT MAPEADO PELO ADAPTER PYTHON", result)
