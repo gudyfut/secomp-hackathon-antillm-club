@@ -10,10 +10,11 @@ fight or assault.
 `PerceptionFrame`. `live.py` owns live capture, YOLO visualization, and passes frames to an
 injected `FeaturePipeline`; it does not calculate features.
 
-Run end-to-end validation from repository root after installing perception dependencies:
+Prepare everything from the repository root with:
 
-```bash
-python main.py --source 0
+```powershell
+python scripts/setup.py
+python scripts/run.py --source 0
 ```
 
 Press `q` or Escape to close preview. Overlay shows FPS, active ByteTrack, detected persons, and

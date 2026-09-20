@@ -31,34 +31,32 @@ Requisitos atuais:
 - Node.js 20 ou superior apenas quando a integracao oficial com Jev for implementada;
 - Git.
 
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -e ".[dev]"
-Copy-Item .env.example .env
-python -m pytest
-```
-
-Developer A instala tambem as dependencias de visao:
+Um unico comando cria `.venv`, instala as dependencias, baixa e verifica o modelo oficial e roda
+os testes offline:
 
 ```powershell
-python -m pip install -e ".[dev,perception]"
+python scripts/setup.py
 ```
 
-Pesos como `yolo26n-pose.pt` sao obtidos localmente pela ferramenta de visao e nao devem ser
+Pesos como `models/yolo26n-pose.pt` sao recursos externos baixados localmente e nao devem ser
 versionados. A chave do Jev deve existir somente no `.env` local.
 
 ## Execucao
 
 Valide fronteira real de perception para features com webcam ou arquivo de video:
 
-```bash
-python main.py --source 0
+```powershell
+python scripts/run.py --source 0
 ```
 
-Instale antes as dependencias de perception com `python -m pip install -e ".[dev,perception]"`.
 Janela mostra pose YOLO, ByteTrack, FPS e emissao de `WorldState`. Terminal mostra somente estados
 emitidos pela `FeaturePipeline`. Pressione `q` ou Escape para encerrar.
+
+Para usar um arquivo de video:
+
+```powershell
+python scripts/run.py --source caminho\video.mp4
+```
 
 ## Onde trabalhar
 

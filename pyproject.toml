@@ -8,18 +8,19 @@ version = "0.1.0"
 description = "MVP de deteccao inteligente de ocorrencias de seguranca em ambientes universitarios"
 requires-python = ">=3.11"
 dependencies = [
-  "numpy",
+  "numpy>=2,<3",
 ]
 
 [project.optional-dependencies]
 perception = [
-  "opencv-python",
-  "supervision",
-  "ultralytics",
+  "lap==0.5.13",
+  "opencv-python==5.0.0.93",
+  "supervision==0.30.4",
+  "ultralytics==8.4.157",
 ]
 dev = [
-  "pytest",
-  "ruff",
+  "pytest>=9,<10",
+  "ruff>=0.16,<0.17",
 ]
 
 [tool.setuptools.packages.find]
