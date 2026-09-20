@@ -110,7 +110,9 @@ def main() -> None:
     run(python, "-m", "pytest")
 
     print("\nSetup complete.")
-    print("Run the webcam with: python scripts/run.py --source 0")
+    print(f"Run the web interface with: {python} -m interface")
+    print("Then open: http://127.0.0.1:8000")
+    print("Optional OpenCV diagnostic: python scripts/run.py --source 0")
     print("Run the offline Jev simulation with the .venv Python and -m decision.examples.simulated")
 
 
