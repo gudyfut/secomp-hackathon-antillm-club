@@ -116,7 +116,6 @@ def test_vision_runtime_connects_yolo_adapter_and_feature_pipeline() -> None:
         "classes": [0],
         "imgsz": 416,
         "device": "cpu",
-        "half": False,
         "verbose": False,
     }
 
@@ -130,13 +129,13 @@ def test_compute_config_prefers_cuda_and_fp16(monkeypatch) -> None:
     monkeypatch.setattr("interface.app.torch.cuda.is_available", lambda: True)
     monkeypatch.setattr("interface.app.torch.cuda.get_device_name", lambda index: "Test GPU")
 
-    assert _compute_config("balanced") == (0, True, 640, "CUDA · Test GPU")
+    assert _compute_config("balanced") == (0, "fp16", 640, "CUDA · Test GPU")
 
 
 def test_compute_config_retains_cpu_fallback(monkeypatch) -> None:
     monkeypatch.setattr("interface.app.torch.cuda.is_available", lambda: False)
 
-    assert _compute_config("balanced") == ("cpu", False, 416, "CPU")
+    assert _compute_config("balanced") == ("cpu", None, 416, "CPU")
 
 
 def test_model_warmup_uses_selected_compute_configuration() -> None:
@@ -151,7 +150,7 @@ def test_model_warmup_uses_selected_compute_configuration() -> None:
 
     model = Model()
     _warm_up_model(  # type: ignore[arg-type]
-        model, inference_size=640, device=0, half_precision=True
+        model, inference_size=640, device=0, quantization="fp16"
     )
 
     assert model.image is not None
@@ -160,7 +159,7 @@ def test_model_warmup_uses_selected_compute_configuration() -> None:
         "classes": [0],
         "imgsz": 640,
         "device": 0,
-        "half": True,
+        "quantize": "fp16",
         "verbose": False,
     }
 

@@ -1,5 +1,5 @@
-from dataclasses import asdict
 import json
+from dataclasses import asdict
 from math import isfinite
 
 import pytest
@@ -14,6 +14,7 @@ def _person(
     *,
     height: float = 100.0,
     wrist_offset: float = 0.0,
+    wrist_x_offset: float = 0.0,
     confidence: float = 0.9,
     pose: bool = True,
 ) -> TrackedPerson:
@@ -22,7 +23,7 @@ def _person(
         points = tuple(
             PoseKeypoint(
                 name,
-                x + offset_x,
+                x + offset_x + (wrist_x_offset if "wrist" in name else 0.0),
                 offset_y + wrist_offset if "wrist" in name else offset_y,
                 confidence,
             )
@@ -54,7 +55,7 @@ def _frame(timestamp_ms: int, *people: TrackedPerson) -> PerceptionFrame:
     return PerceptionFrame("camera", timestamp_ms // 100, timestamp_ms, 1_000, 800, tuple(people))
 
 
-def _pipeline(**changes: float | int) -> TemporalFeaturePipeline:
+def _pipeline(**changes: float) -> TemporalFeaturePipeline:
     config = FeatureConfig(
         world_state_interval_seconds=0.0, minimum_track_age_seconds=0.0, **changes
     )

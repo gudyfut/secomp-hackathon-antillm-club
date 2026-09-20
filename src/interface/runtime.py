@@ -40,7 +40,7 @@ class VisionRuntime:
         pipeline: TemporalFeaturePipeline | None = None,
         inference_size: int = 416,
         device: str | int = "cpu",
-        half_precision: bool = False,
+        quantization: str | None = None,
     ) -> None:
         if inference_size < 320 or inference_size % 32 != 0:
             raise ValueError("inference_size must be at least 320 and divisible by 32")
@@ -49,21 +49,22 @@ class VisionRuntime:
         self._pipeline = pipeline or TemporalFeaturePipeline()
         self._inference_size = inference_size
         self._device = device
-        self._half_precision = half_precision
+        self._quantization = quantization
         self._frame_index = 0
 
     def process(self, image: np.ndarray, timestamp_ms: int) -> ProcessedFrame:
         started = perf_counter()
-        result = self._model.track(
-            image,
-            persist=True,
-            tracker="bytetrack.yaml",
-            classes=[0],
-            imgsz=self._inference_size,
-            device=self._device,
-            half=self._half_precision,
-            verbose=False,
-        )[0]
+        model_options: dict[str, Any] = {
+            "persist": True,
+            "tracker": "bytetrack.yaml",
+            "classes": [0],
+            "imgsz": self._inference_size,
+            "device": self._device,
+            "verbose": False,
+        }
+        if self._quantization is not None:
+            model_options["quantize"] = self._quantization
+        result = self._model.track(image, **model_options)[0]
         inference_ms = (perf_counter() - started) * 1_000
         frame = ultralytics_result_to_frame(
             result,

@@ -30,15 +30,15 @@ STATIC_ROOT = Path(__file__).resolve().parent / "static"
 LOGGER = logging.getLogger(__name__)
 
 
-def _compute_config(profile: str) -> tuple[str | int, bool, int, str]:
+def _compute_config(profile: str) -> tuple[str | int, str | None, int, str]:
     """Select CUDA explicitly when available, retaining a predictable CPU fallback."""
 
     if torch.cuda.is_available():
         sizes = {"speed": 416, "balanced": 640, "precision": 960}
         name = torch.cuda.get_device_name(0)
-        return 0, True, sizes[profile], f"CUDA · {name}"
+        return 0, "fp16", sizes[profile], f"CUDA · {name}"
     sizes = {"speed": 320, "balanced": 416, "precision": 512}
-    return "cpu", False, sizes[profile], "CPU"
+    return "cpu", None, sizes[profile], "CPU"
 
 
 def _model_path() -> Path:
@@ -63,19 +63,20 @@ def _warm_up_model(
     *,
     inference_size: int,
     device: str | int,
-    half_precision: bool,
+    quantization: str | None,
 ) -> None:
     """Pay one-time predictor initialization cost before a recorded video starts."""
 
     image = np.zeros((inference_size, inference_size, 3), dtype=np.uint8)
-    model.predict(
-        image,
-        classes=[0],
-        imgsz=inference_size,
-        device=device,
-        half=half_precision,
-        verbose=False,
-    )
+    options: dict[str, Any] = {
+        "classes": [0],
+        "imgsz": inference_size,
+        "device": device,
+        "verbose": False,
+    }
+    if quantization is not None:
+        options["quantize"] = quantization
+    model.predict(image, **options)
 
 
 async def _send(websocket: WebSocket, lock: asyncio.Lock, event: dict[str, Any]) -> None:
@@ -126,7 +127,7 @@ def create_app() -> FastAPI:
                     {"type": "fatal", "message": "perfil de desempenho inválido"},
                 )
                 return
-            device, half_precision, inference_size, compute_label = _compute_config(profile)
+            device, quantization, inference_size, compute_label = _compute_config(profile)
 
             model_path = _model_path()
             if not model_path.is_file():
@@ -147,20 +148,20 @@ def create_app() -> FastAPI:
                 model,
                 inference_size=inference_size,
                 device=device,
-                half_precision=half_precision,
+                quantization=quantization,
             )
             runtime = VisionRuntime(
                 model,
                 source_id=f"browser-{start['source']}",
                 inference_size=inference_size,
                 device=device,
-                half_precision=half_precision,
+                quantization=quantization,
             )
 
             coordinator: DecisionCoordinator | None = None
             if os.getenv("TYPESAFE_API_KEY", "").strip():
                 sdk_client = AsyncTypeSafeClient()
-                interval_ms = max(250, int(float(os.getenv("JEV_INTERVAL_SECONDS", "2")) * 1_000))
+                interval_ms = max(250, int(float(os.getenv("JEV_INTERVAL_SECONDS", "0.75")) * 1_000))
                 coordinator = DecisionCoordinator(
                     JevDecisionEngine(sdk_client), interval_ms=interval_ms
                 )

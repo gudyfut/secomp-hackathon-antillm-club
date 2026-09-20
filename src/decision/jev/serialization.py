@@ -140,7 +140,14 @@ def world_state_to_json(world_state: WorldState) -> dict[str, Any]:
         },
         "semantics": {
             "null": "unknown_or_not_computable; never assume zero or false",
+            "temporal_aggregation": (
+                "motion values are recent peaks; interaction distances are recent minima except "
+                "distance_between_people, which is current"
+            ),
             "distances": "normalized by body/bounding-box scale; smaller means closer",
+            "cross_person_wrist_distances": (
+                "minimum of first-to-second and second-to-first directions"
+            ),
             "speeds": "normalized body heights per second",
             "acceleration": "normalized body heights per second squared; may be negative",
             "bounding_box_iou": "0 means no overlap; 1 means complete overlap",

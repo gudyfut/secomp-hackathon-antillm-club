@@ -10,15 +10,17 @@ def build_mvp_questions() -> dict[str, Question]:
 
     evidence_rule = (
         "Use only world_state. A null is unknown, never zero or false. Do not invent visual "
-        "facts. Judge the temporal window as a whole."
+        "facts. Judge the temporal window as a whole. Recent peak motion and minimum proximity "
+        "are intentionally retained so brief strikes are not lost between evaluations."
     )
     return {
         "evidence_quality": Choice(
             instructions=f"{evidence_rule} Is the evidence sufficient for an incident decision?",
             criteria={
                 "SUFFICIENT": (
-                    "There are enough relevant motion and/or interaction signals to distinguish "
-                    "the listed event classes with useful confidence."
+                    "There are enough motion or interaction signals to distinguish the listed "
+                    "event classes. A rapid arm-motion peak combined with probable wrist contact "
+                    "or very small wrist-to-head/torso distance can be sufficient by itself."
                 ),
                 "INSUFFICIENT": (
                     "Signals are absent, too sparse, contradictory, or too ambiguous for a "
@@ -31,11 +33,17 @@ def build_mvp_questions() -> dict[str, Question]:
             criteria={
                 "NORMAL": "Ordinary movement or interaction with no clear safety concern.",
                 "SUSPICIOUS_INTERACTION": (
-                    "Concerning proximity, approach, contact, or motion, but not a coherent "
-                    "fight or assault pattern."
+                    "Concerning rapid approach, close wrist-to-head/torso motion, probable "
+                    "contact, or a strong arm-motion peak, but not a coherent fight or assault."
                 ),
-                "FIGHT": "Reciprocal or repeated aggressive physical exchange between people.",
-                "ASSAULT": "Apparently one-sided physical aggression against another person.",
+                "FIGHT": (
+                    "Reciprocal or repeated aggressive physical exchange, especially repeated "
+                    "close-contact arm motion involving both people."
+                ),
+                "ASSAULT": (
+                    "Apparently one-sided physical aggression, including a fast hand movement "
+                    "that reaches another person's head or torso even if it is brief."
+                ),
                 "UNKNOWN_ANOMALY": (
                     "A concerning observable pattern that does not fit the other event classes."
                 ),
