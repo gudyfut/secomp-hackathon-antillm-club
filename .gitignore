@@ -1,0 +1,57 @@
+# Segredos e configuracoes locais
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+*.egg-info/
+
+# JavaScript / TypeScript
+node_modules/
+.next/
+dist/
+build/
+coverage/
+.coverage
+
+# IDE e sistema operacional
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Logs, caches e temporarios
+*.log
+.cache/
+tmp/
+runs/
+
+# Dados, videos, pesos e artefatos grandes
+data/raw/**
+data/processed/**
+models/**
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.onnx
+*.pt
+*.pth
+*.weights
+*.engine
+*.torchscript
+
+# Preserve instrucoes nas pastas ignoradas
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!models/.gitkeep
+!models/README.md

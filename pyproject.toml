@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "campus-sentinel"
+version = "0.1.0"
+description = "MVP de deteccao inteligente de ocorrencias de seguranca em ambientes universitarios"
+requires-python = ">=3.11"
+dependencies = [
+  "numpy",
+]
+
+[project.optional-dependencies]
+perception = [
+  "opencv-python",
+  "supervision",
+  "ultralytics",
+]
+dev = [
+  "pytest",
+  "ruff",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "-q -p no:cacheprovider"
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

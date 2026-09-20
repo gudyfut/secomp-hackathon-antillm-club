@@ -1,0 +1,1 @@
+"""Campus Sentinel test suite."""
