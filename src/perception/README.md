@@ -1,21 +1,26 @@
-# Perception
+# Percepção
 
-Ownership: Developer A.
+Este módulo recebe frames de câmera ou vídeo, executa YOLO26n-pose com ByteTrack e emite
+`contracts.PerceptionFrame`. Ele relata somente observações — pessoas, caixas, keypoints,
+confianças e IDs — e nunca classifica uma interação como briga ou agressão.
 
-This module reads video/camera frames, runs YOLO26n-pose with ByteTrack, and emits
-`contracts.PerceptionFrame`. It reports only observations; it never labels an interaction as a
-fight or assault.
+`adapters/ultralytics.py` converte um resultado do Ultralytics para os contratos do projeto.
+`live.py` contém o fluxo diagnóstico OpenCV e entrega os frames a uma `FeaturePipeline` injetada;
+ele não calcula features nem chama o Jev.
 
-`adapters/ultralytics.py` copies pose tracking scalars from one Ultralytics result into a
-`PerceptionFrame`. `live.py` owns live capture, YOLO visualization, and passes frames to an
-injected `FeaturePipeline`; it does not calculate features.
-
-Prepare everything from the repository root with:
+O uso principal ocorre pela interface web:
 
 ```powershell
 python scripts/setup.py
-python scripts/run.py --source 0
+.\.venv\Scripts\python.exe -m interface
 ```
 
-Press `q` or Escape to close preview. Overlay shows FPS, active ByteTrack, detected persons, and
-whether FeaturePipeline emitted a WorldState. Terminal prints only emitted WorldStates.
+Para testar somente percepção e features:
+
+```powershell
+python scripts/run.py --source 0
+python scripts/run.py --source caminho\video.mp4
+```
+
+Na janela OpenCV, pressione `q` ou Escape. O overlay mostra FPS, estado do ByteTrack, pessoas
+detectadas e emissão de `WorldState`. Esse diagnóstico não executa a decisão contextual.

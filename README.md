@@ -27,6 +27,34 @@ O projeto investiga uma arquitetura em que:
 Essa separação é importante: o YOLO não declara que existe uma briga, e o Jev não recebe imagens
 brutas. Cada camada tem uma responsabilidade verificável.
 
+### Por que esse problema importa no campus
+
+Universidades reúnem salas, corredores, áreas de convivência e espaços abertos com circulação
+intensa e horários muito diferentes. Mesmo quando já existem câmeras, depender exclusivamente de
+uma pessoa acompanhando várias telas pode atrasar a percepção de uma agressão e a mobilização de
+quem deve avaliar a situação.
+
+Uma agressão também não pode ser inferida com segurança por uma única imagem. Aproximações rápidas,
+movimentos repetidos dos braços, contato provável e quedas só ganham significado quando observados
+como uma sequência temporal. Ao mesmo tempo, abraços, esportes e brincadeiras podem produzir sinais
+visualmente parecidos. O desafio do projeto é transformar vídeo em evidência útil sem confundir um
+sinal isolado com uma conclusão definitiva.
+
+### Como o Campus Sentinel contribui
+
+O Campus Sentinel funciona como uma camada de triagem para apoiar a equipe responsável, reduzindo o
+tempo entre uma interação potencialmente perigosa e sua revisão humana:
+
+1. processa localmente a câmera ou o vídeo e detecta pose, pessoas e trajetórias;
+2. agrega movimento, proximidade e contato provável em uma janela temporal;
+3. envia ao Jev apenas o estado estruturado da cena, sem imagens ou identidade das pessoas;
+4. recebe julgamentos tipados de evento, severidade, urgência e ação recomendada;
+5. mostra a decisão, as evidências e eventuais erros de integração no painel.
+
+O escopo atual é deliberadamente restrito a evidências de agressão e briga. O MVP não faz
+reconhecimento facial, não identifica pessoas, não detecta roubo ou vandalismo, não armazena
+gravações e não aciona segurança automaticamente.
+
 ## Demonstração disponível
 
 A interface web local permite:
@@ -390,6 +418,24 @@ Confirme `TYPESAFE_API_KEY` no `.env`, sem aspas ou espaços adicionais, e reini
 - agressões muito ocultas ou fora do enquadramento podem produzir falsos negativos;
 - disponibilidade, latência e limites da API TypeSafe afetam a decisão contextual;
 - o sistema é um MVP de demonstração, não um produto certificado de segurança.
+
+## Melhorias futuras
+
+As próximas etapas propostas são incrementais e dependem de validação ética, técnica e operacional:
+
+- montar um conjunto autorizado e representativo de vídeos para calibrar os limiares por ambiente;
+- medir precisão, revocação, falsos positivos, falsos negativos, latência e estabilidade de IDs;
+- melhorar a robustez a oclusão, perspectiva, baixa iluminação e cruzamento de pessoas;
+- avaliar disparos do Jev por mudança material de estado, além da cadência mínima configurável;
+- criar perfis de câmera e ferramentas de calibração sem alterar o contrato entre as camadas;
+- aprimorar acessibilidade, histórico visual da sessão e explicação dos sinais no painel;
+- adicionar auditoria, retenção mínima e controle de acesso antes de qualquer armazenamento;
+- integrar alertas institucionais somente com políticas definidas, confirmação humana e testes de
+  segurança;
+- realizar pilotos controlados com a comunidade universitária antes de qualquer uso operacional.
+
+Esses itens são um roteiro, não funcionalidades já entregues. A prioridade continua sendo validar
+bem o fluxo de agressões do MVP antes de ampliar a taxonomia ou a infraestrutura.
 
 ## Estrutura do repositório
 

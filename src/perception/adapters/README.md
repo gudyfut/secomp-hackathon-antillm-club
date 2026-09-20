@@ -1,11 +1,14 @@
-# Perception adapters
+# Adaptador do Ultralytics
 
-The first implementation here must convert an Ultralytics result into the project-owned types:
+`ultralytics.py` mantém a fronteira entre a biblioteca externa e os contratos internos:
 
 ```text
 Ultralytics Result -> adapter -> PerceptionFrame
 ```
 
-The adapter must copy only required scalar data (boxes, pose points, confidence, track IDs,
-frame/timestamp metadata). Never return tensors, Ultralytics `Results`, ByteTrack objects, or
-OpenCV frames as part of `PerceptionFrame`.
+O adaptador copia somente escalares necessários: bounding boxes, confiança, `track_id`, 17
+keypoints COCO com confiança e metadados de frame/timestamp. Tensores, objetos `Results`, objetos do
+ByteTrack e frames OpenCV nunca fazem parte de `PerceptionFrame`.
+
+As features e a interface dependem do contrato do projeto, não da estrutura interna do
+Ultralytics. Alterações no SDK devem ser absorvidas e testadas neste adaptador.

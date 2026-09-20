@@ -1,15 +1,21 @@
-# Modulos da aplicacao
+# Módulos da aplicação
 
 ```text
-perception -> PerceptionFrame -> features -> WorldState -> decision -> DecisionResult
+câmera/vídeo
+  -> perception -> PerceptionFrame
+  -> features   -> WorldState
+  -> decision   -> DecisionResult
+  -> interface
 ```
 
-- `contracts/`: tipos e portas compartilhados, sem logica de negocio.
-- `perception/`: video, YOLO26n-pose, ByteTrack e adaptacao para os contratos internos.
-- `features/`: historico temporal, geometria, movimento e estado do mundo.
-- `decision/`: integracao Jev, politica de chamada e mapeamento da decisao.
-- `interface/`: futura visualizacao; consome apenas contratos internos.
-- `shared/`: utilitarios realmente neutros; nao use como pasta de codigo sem dono.
+- `contracts/`: contratos e portas estáveis, sem lógica de negócio;
+- `perception/`: YOLO26n-pose, ByteTrack e adaptação para `PerceptionFrame`;
+- `features/`: histórico, geometria, movimento e construção de `WorldState`;
+- `decision/`: serialização, perguntas tipadas, chamada ao Jev e `DecisionResult`;
+- `interface/`: FastAPI, WebSocket, coordenação do fluxo e painel web;
+- `shared/`: reservado somente a utilitários realmente neutros.
 
-Subdiretorios devem nascer quando houver codigo correspondente. O detalhamento arquitetural esta
-em `docs/projeto/arquitetura.md`.
+Os adaptadores convertem resultados externos antes das fronteiras estáveis: resultados do
+Ultralytics viram `PerceptionFrame` e respostas do SDK TypeSafe viram `DecisionResult`. A camada de
+composição da interface instancia essas dependências, mas o painel do navegador recebe apenas JSON
+derivado dos contratos do projeto. O detalhamento está no [README principal](../README.md).

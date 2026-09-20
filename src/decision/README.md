@@ -1,63 +1,51 @@
-# Jev decision layer
+# Camada de decisão Jev
 
-Ownership: Developer B.
+Este módulo recebe `contracts.WorldState`, envia somente evidências estruturadas ao Jev e converte
+a resposta do SDK oficial para tipos próprios. Nenhum pixel, objeto do Ultralytics ou chave de API
+é incluído no estado enviado.
 
-Este modulo recebe `contracts.WorldState`, envia apenas evidencias estruturadas ao Jev e converte
-a resposta do SDK em tipos proprios. O restante do projeto nunca deve receber objetos internos do
-SDK. A integracao usa Python e o pacote oficial `typesafe-sdk`.
-
-## Estado atual
-
-`jev/JevWorldStateEvaluator` implementa a fronteira testavel:
+## Fluxo atual
 
 ```text
 WorldState
-  -> JSON com worldState
-  -> pergunta Choice provisoria
-  -> SDK Python do Jev
-  -> JevAssessment independente do SDK
+  -> build_jev_state
+  -> cinco perguntas Choice em uma chamada system_one
+  -> JevDecisionAssessment
+  -> DecisionResult
 ```
 
-A pergunta atual distingue `no_clear_concern`, `concerning_interaction` e
-`insufficient_evidence`. Ela valida a integracao, mas ainda nao e um classificador calibrado de
-briga. Por isso o adapter ainda nao inventa um mapeamento definitivo para `DecisionResult`. Evento,
-severidade, urgencia, acao, politica de confianca e cadencia serao definidos com exemplos reais do
-MVP.
+As perguntas independentes avaliam qualidade da evidência, evento, severidade, urgência e ação. O
+vocabulário de evento é `NORMAL`, `SUSPICIOUS_INTERACTION`, `FIGHT`, `ASSAULT` ou
+`UNKNOWN_ANOMALY`. A ação é consultiva: `IGNORE`, `MONITOR`, `ALERT` ou `DISPATCH_SECURITY`.
 
-Falha da API, evidencia insuficiente e ausencia de preocupacao permanecem estados diferentes.
-Calculos deterministicos continuam em `features`; a decisao contextual pertence ao Jev.
+`JevDecisionAssessment` preserva cada escolha, confiança e distribuição de probabilidades sem
+calcular uma média artificial. Quando o Jev indica evidência insuficiente, não é criado um
+`DecisionResult`. Falha de API, evidência insuficiente e evento normal permanecem estados distintos.
 
-## Instalacao
-
-Na raiz do repositorio:
+## Configuração e segurança
 
 ```powershell
 python -m pip install -e ".[dev,decision]"
 ```
 
-O cliente le `TYPESAFE_API_KEY` do ambiente. O exemplo real carrega essa variavel do `.env` da
-raiz. Nunca versione nem imprima a chave.
+O cliente lê `TYPESAFE_API_KEY` do ambiente; os exemplos carregam o `.env` da raiz. Nunca versione,
+imprima ou envie essa chave ao cliente web. `JEV_INTERVAL_SECONDS` é aplicado pelo coordenador da
+interface e não pelo adaptador de decisão.
 
-## Comandos
+## Verificação
 
 ```powershell
-# Testes offline: nao usam chave nem rede
-python -m pytest tests/decision
-
-# Demonstra exatamente a entrada, perguntas e saida usando uma resposta simulada
-python -m decision.examples.simulated
-
-# Faz uma chamada real e mostra o JSON HTTP enviado e recebido sem mostrar headers
-python -m decision.examples.live
+.\.venv\Scripts\python.exe -m pytest tests\decision
+.\.venv\Scripts\python.exe -m decision.examples.simulated
+.\.venv\Scripts\python.exe -m decision.examples.live
 ```
 
-O campo `usage.output_tokens` e telemetria retornada pela API. Sua presenca nao implica, sozinha,
-cobranca de tokens de saida.
+Os testes e o exemplo simulado não usam a rede. O exemplo real consome a API. O campo
+`usage.output_tokens` é telemetria retornada pelo serviço e, isoladamente, não comprova cobrança.
 
-## Onde alterar depois
+Arquivos principais:
 
-- `jev/serialization.py`: formato JSON derivado de `WorldState`;
-- `jev/questions.py`: perguntas e criterios enviados ao modelo;
-- `jev/evaluator.py`: chamada do SDK e mapeamento da resposta;
-- `examples/`: demonstracoes offline e real;
-- `tests/decision/test_jev.py`: contrato e falhas do adapter.
+- `jev/serialization.py`: JSON compacto derivado do `WorldState`;
+- `jev/questions.py`: perguntas `Choice` e critérios;
+- `jev/evaluator.py`: chamada `system_one`, validação e mapeamento;
+- `jev/types.py`: tipos internos desacoplados do SDK.

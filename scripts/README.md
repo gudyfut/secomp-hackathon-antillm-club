@@ -1,48 +1,50 @@
-# Scripts reproduziveis
+# Scripts reproduzíveis
 
 ## Preparar um clone novo
+
+Na raiz do repositório:
 
 ```powershell
 python scripts/setup.py
 ```
 
-O script:
+O instalador exige Python 3.11+, cria `.venv`, instala os extras `dev`, `perception`, `decision` e
+`interface`, tenta habilitar PyTorch CUDA em uma GPU NVIDIA compatível, baixa e verifica
+`models/yolo26n-pose.pt`, cria o `.env` local quando necessário e executa os testes offline. Se CUDA
+não estiver disponível, o sistema permanece utilizável em CPU.
 
-1. exige Python 3.11 ou superior;
-2. cria `.venv` sem alterar o Python global;
-3. instala o projeto com os extras `dev`, `perception` e `decision`;
-4. baixa `models/yolo26n-pose.pt` da origem oficial do Ultralytics;
-5. valida tarefa e SHA-256 do peso;
-6. cria `.env` a partir de `.env.example` quando ele ainda nao existe;
-7. executa todos os testes offline.
+## Executar a interface completa
 
-Internet e necessaria apenas na primeira preparacao. O modelo e as dependencias ficam locais e
-nao sao enviados ao Git.
+```powershell
+.\.venv\Scripts\python.exe -m interface
+```
 
-## Executar
+Depois, abra `http://127.0.0.1:8000`. Este é o fluxo principal: câmera ou vídeo, YOLO Pose,
+ByteTrack, features temporais, Jev e painel web.
+
+## Diagnóstico local de percepção
 
 ```powershell
 python scripts/run.py --source 0
+python scripts/run.py --source caminho\video.mp4
 ```
 
-O wrapper sempre usa o ambiente criado pelo setup, sem exigir ativacao manual. Tambem aceita um
-arquivo de video em `--source` e os demais argumentos de `main.py`.
+`run.py` usa automaticamente o Python da `.venv` e encaminha os argumentos a `main.py`. Esse modo
+abre uma janela OpenCV com percepção e features; não executa a interface web nem a decisão Jev.
+Pressione `q` ou Escape para encerrar.
 
 ## Exemplos do Jev
-
-No Windows, sem ativar o ambiente:
 
 ```powershell
 .\.venv\Scripts\python.exe -m decision.examples.simulated
 .\.venv\Scripts\python.exe -m decision.examples.live
 ```
 
-O exemplo simulado e offline. O exemplo real exige `TYPESAFE_API_KEY` preenchida no `.env`.
+O primeiro usa uma resposta simulada e não consome rede ou créditos. O segundo faz uma avaliação
+real e exige `TYPESAFE_API_KEY` no `.env`.
 
 ## Baixar ou revalidar somente os pesos
 
-Com o ambiente ativado:
-
 ```powershell
-python scripts/download_models.py
+.\.venv\Scripts\python.exe scripts\download_models.py
 ```

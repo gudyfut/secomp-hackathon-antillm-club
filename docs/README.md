@@ -1,5 +1,8 @@
 # Documentacao do Campus Sentinel
 
+O [README principal](../README.md) e o guia canonico para apresentacao, instalacao, configuracao,
+teste do MVP, stack e limitacoes. Os arquivos abaixo registram detalhes de projeto e entrega.
+
 Este diretorio separa documentacao de projeto, registros de desenvolvimento e materiais de
 entrega. O PDF `ORIENTAÇÕES.pdf` e a referencia oficial recebida da organizacao.
 

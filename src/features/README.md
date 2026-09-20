@@ -1,55 +1,45 @@
-# Feature extraction and WorldState
+# Extração de features e WorldState
 
-Ownership: Developer B.
+Este módulo consome somente `contracts.PerceptionFrame`, mantém históricos limitados por
+`track_id`, calcula evidências determinísticas e emite `contracts.WorldState`. Ele não decide se há
+uma briga e não depende de YOLO, vídeos ou pesos para ser testado.
 
-This module consumes only `contracts.PerceptionFrame`, maintains bounded track history, computes
-deterministic evidence, and emits `contracts.WorldState`. It must remain testable using
-`tests/fixtures/synthetic.py` without YOLO, videos, or model weights.
+## Pipeline atual
 
-Add small modules as features are implemented. Likely seams are history, geometry, motion,
-interaction, and the coordinating extractor; do not create the whole tree in advance.
+`TemporalFeaturePipeline.update(frame)` usa os timestamps da fonte, não o relógio de execução. O
+histórico padrão retém até 5 segundos e pode emitir um `WorldState` a cada 0,25 segundo. Amostras e
+interações antigas são descartadas para limitar o uso de memória.
 
-Distances should use body or bounding-box scale when possible. Every feature must document its
-unit/range and its behavior when keypoints or history are insufficient.
+As medidas usam a altura corporal/bounding box como escala sempre que possível:
 
-## Implemented pipeline
+- velocidade corporal e pico recente de velocidade;
+- velocidade, aceleração e picos de movimento dos braços;
+- intensidade de articulação corporal relativa ao torso;
+- heurística de possível pessoa caída;
+- distância entre pessoas e aproximação rápida;
+- menor distância recente de punhos à cabeça ou ao torso, nos dois sentidos;
+- sobreposição das bounding boxes, proximidade e contato provável;
+- duração da proximidade e movimento agressivo repetido.
 
-`TemporalFeaturePipeline.update(frame)` absorbs every `PerceptionFrame`, keeps bounded histories
-per temporary `track_id`, and emits `WorldState` at configurable cadence. It uses only frame
-timestamps, never execution time. Bbox center is global movement reference. Torso-relative pose
-coordinates remove global translation before wrist and body articulation measurements.
+Os sinais booleanos `rapid_approach`, `possible_contact` e `repeated_aggressive_motion` são
+calculados com os limiares iniciais de `FeatureConfig`. Eles são evidências objetivas para o Jev,
+não um veredito de violência.
 
-Initial engineering defaults in `FeatureConfig` are `0.5 s`, `2.0 s`, and `5.0 s` conceptual
-windows; `5.0 s` retained history; `0.25 s` output cadence; `0.25` EMA alpha; and `0.35` minimum
-keypoint confidence. These values require calibration against recorded camera data.
+## Unidades e dados ausentes
 
-Contract fields use these units:
+- velocidades: alturas corporais por segundo;
+- aceleração: alturas corporais por segundo ao quadrado;
+- distâncias: alturas corporais em espaço de imagem;
+- `bbox_overlap`: IoU visual no intervalo `[0, 1]`;
+- duração: segundos.
 
-- `PersonFeatures.body_speed`: body-heights/second, smoothed bbox-center speed.
-- `wrist_speed` and `wrist_acceleration`: torso-relative wrist articulation in
-  body-heights/second and body-heights/second-squared.
-- `motion_intensity`: torso-relative body articulation in body-heights/second.
-- `distance_between_people`: bbox-center distance in body-heights.
-- `wrist_to_head_distance` and `wrist_to_torso_distance`: image-space point distance in
-  body-heights.
-- `bbox_overlap`: visual bbox IoU in `[0, 1]`, not physical contact.
+Histórico insuficiente, timing inválido, caixa degenerada ou keypoint com baixa confiança produz
+`None`; movimento observado igual a zero produz `0.0`. Os valores padrão — incluindo confiança
+mínima `0.35`, contato `0.32`, movimento de braço `0.80` e dois picos para repetição — são limiares
+de engenharia e ainda precisam ser calibrados com vídeos representativos.
 
-Missing history, invalid timing, degenerate boxes, insufficient torso points, or low-confidence
-keypoints emit `None`; observed zero motion emits `0.0`.
+## Limitações
 
-## Contract gaps
-
-Current immutable `WorldState` contracts cannot carry continuous body acceleration, local arm and
-body motion separately, pose quality/coverage, distance rate, movement vector, or direction
-similarity. `rapid_approach` is Boolean, but no calibrated threshold exists and this module must
-not add one; it remains `None`. `possible_contact` and `repeated_aggressive_motion` also remain
-`None`, because they require semantic interpretation. Minimal future contract addition: optional
-continuous fields for these measurements, each documented with units. No contract changes were
-made here.
-
-## Limitations
-
-Bbox normalization does not fully correct perspective. Two-dimensional distance is not physical
-distance. Pose confidence can degrade under occlusion. Track IDs are temporary and can switch.
-Local pose motion remains detector-noise sensitive. Different cameras need calibration. Pairwise
-work is O(n-squared) for `n` active tracks.
+Normalização 2D não mede distância física nem remove totalmente a perspectiva. Oclusões degradam a
+pose, IDs podem trocar, ruído do detector afeta movimentos locais e a comparação entre pares cresce
+quadraticamente com o número de pessoas visíveis.
