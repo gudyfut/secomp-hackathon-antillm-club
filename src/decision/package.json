@@ -1,0 +1,22 @@
+{
+  "name": "@campus-sentinel/decision",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --import tsx ../../tests/decision/jev.test.ts",
+    "typecheck": "tsc --noEmit",
+    "example:live": "node --env-file=../../.env --import tsx examples/live.ts"
+  },
+  "dependencies": {
+    "@typesafe-ai/sdk": "0.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2"
+  }
+}
