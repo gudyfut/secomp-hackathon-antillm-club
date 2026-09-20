@@ -50,8 +50,15 @@ versionados. A chave do Jev deve existir somente no `.env` local.
 
 ## Execucao
 
-Ainda nao existe um entrypoint da aplicacao. Cada modulo deve documentar seu comando assim que
-possuir um fluxo executavel; nao mantenha comandos ficticios aqui.
+Valide fronteira real de perception para features com webcam ou arquivo de video:
+
+```bash
+python main.py --source 0
+```
+
+Instale antes as dependencias de perception com `python -m pip install -e ".[dev,perception]"`.
+Janela mostra pose YOLO, ByteTrack, FPS e emissao de `WorldState`. Terminal mostra somente estados
+emitidos pela `FeaturePipeline`. Pressione `q` ou Escape para encerrar.
 
 ## Onde trabalhar
 
