@@ -33,7 +33,7 @@ Requisitos atuais:
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install -e ".[dev,decision]"
+python -m pip install -e ".[dev]"
 Copy-Item .env.example .env
 python -m pytest
 ```
@@ -41,23 +41,16 @@ python -m pytest
 Developer A instala tambem as dependencias de visao:
 
 ```powershell
-python -m pip install -e ".[dev,perception]"
+python scripts/setup.py
 ```
 
-Pesos como `yolo26n-pose.pt` sao obtidos localmente pela ferramenta de visao e nao devem ser
+Pesos como `models/yolo26n-pose.pt` sao recursos externos baixados localmente e nao devem ser
 versionados. A chave do Jev deve existir somente no `.env` local.
 
-## Execucao da camada Jev
+## Execucao
 
-O fluxo completo da aplicacao ainda nao possui um entrypoint. A camada decisoria ja oferece uma
-simulacao offline e um exemplo real isolado:
-
-```powershell
-python -m decision.examples.simulated
-python -m decision.examples.live
-```
-
-O exemplo real le `TYPESAFE_API_KEY` do `.env`; os headers nunca sao impressos.
+Ainda nao existe um entrypoint da aplicacao. Cada modulo deve documentar seu comando assim que
+possuir um fluxo executavel; nao mantenha comandos ficticios aqui.
 
 ## Onde trabalhar
 
