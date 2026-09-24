@@ -95,8 +95,8 @@ async def _evaluate_and_send(
     try:
         event = await coordinator.evaluate(world_state)
     # Keep provider and transport failures distinct from a normal/unknown decision.
-    except Exception as error:  # noqa: BLE001
-        event = {"type": "decision_error", "message": str(error)}
+    except Exception:  # noqa: BLE001
+        event = {"type": "decision_error", "message": "Falha na avaliação do Jev."}
     await _send(websocket, lock, event)
 
 
@@ -279,11 +279,11 @@ def create_app() -> FastAPI:
                             )
                         )
                 # This is the fault boundary for third-party model and image codecs.
-                except Exception as error:  # noqa: BLE001
+                except Exception:  # noqa: BLE001
                     await _send(
                         websocket,
                         send_lock,
-                        {"type": "frame_error", "message": str(error)},
+                        {"type": "frame_error", "message": "Falha ao processar o frame."},
                     )
                 finally:
                     next_timestamp_ms = None
@@ -291,9 +291,9 @@ def create_app() -> FastAPI:
         except WebSocketDisconnect:
             pass
         # Keep an unexpected session failure isolated from the ASGI server.
-        except Exception as error:  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             try:
-                await _send(websocket, send_lock, {"type": "fatal", "message": str(error)})
+                await _send(websocket, send_lock, {"type": "fatal", "message": "Falha na sessão."})
             except Exception:
                 LOGGER.debug("WebSocket closed before fatal event could be sent", exc_info=True)
         finally:

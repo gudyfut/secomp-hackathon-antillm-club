@@ -232,7 +232,7 @@ def test_background_decision_is_sent_without_waiting_for_another_frame() -> None
 def test_background_decision_reports_jev_failure_separately() -> None:
     class Coordinator:
         async def evaluate(self, world_state: WorldState) -> dict[str, object]:
-            raise RuntimeError("provider unavailable")
+            raise RuntimeError("provider unavailable: credential-value")
 
     class WebSocket:
         def __init__(self) -> None:
@@ -248,4 +248,4 @@ def test_background_decision_reports_jev_failure_separately() -> None:
         )
     )
 
-    assert socket.events == [{"type": "decision_error", "message": "provider unavailable"}]
+    assert socket.events == [{"type": "decision_error", "message": "Falha na avaliação do Jev."}]
