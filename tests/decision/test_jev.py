@@ -88,9 +88,27 @@ def test_world_state_becomes_compact_semantic_jev_input() -> None:
     assert payload["people"][0]["person_fallen"] is None
     interaction = payload["interactions"][0]
     assert interaction["possible_contact"] is True
+    assert interaction["pairwise_evidence_level"] == "SINGLE_HEAD_STRIKE"
     assert interaction["repeated_aggressive_motion"] is None
-    assert "first_wrist_to_second_head_distance_body_heights" in interaction
+    assert "minimum_cross_person_wrist_to_head_distance_body_heights" in interaction
     assert "wrist_to_head_distance" not in interaction
+    assert "proximity alone is false" in payload["semantics"]["possible_contact"]
+    assert "small distance" in payload["semantics"]["negative_evidence"]
+    assert "APPROACH_ONLY" in payload["semantics"]["pairwise_evidence_level"]
+
+
+def test_approach_without_contact_is_labeled_as_ambiguous_context() -> None:
+    state = make_world_state()
+    interaction = replace(
+        state.interactions[0],
+        rapid_approach=True,
+        possible_contact=False,
+        repeated_aggressive_motion=False,
+    )
+
+    payload = world_state_to_json(replace(state, interactions=(interaction,)))
+
+    assert payload["interactions"][0]["pairwise_evidence_level"] == "APPROACH_ONLY"
 
 
 @pytest.mark.parametrize(
@@ -134,6 +152,20 @@ def test_questions_cover_each_independent_decision_dimension() -> None:
         "urgency",
         "action",
     }
+
+
+def test_questions_explicitly_reject_static_proximity_as_aggression() -> None:
+    questions = build_mvp_questions()
+    instructions = questions["event"].instructions
+    normal = questions["event"].criteria["NORMAL"]
+
+    assert "bounding-box overlap" in instructions
+    assert "not aggression" in instructions
+    assert "even when extreme" in instructions
+    assert "Never combine" in instructions
+    assert "SINGLE_HEAD_STRIKE" in instructions
+    assert "rapid approach" in normal
+    assert "motion-gated contact" in normal
 
 
 def test_sufficient_response_maps_to_shared_decision_contract() -> None:

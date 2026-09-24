@@ -169,6 +169,10 @@ def create_app() -> FastAPI:
             else:
                 jev_message = "Jev desativado: TYPESAFE_API_KEY ausente"
 
+            yolo_enabled = bool(start.get("yolo_enabled", True))
+            jev_available = coordinator is not None
+            jev_enabled = bool(start.get("jev_enabled", True)) and jev_available
+
             await _send(
                 websocket,
                 send_lock,
@@ -176,12 +180,15 @@ def create_app() -> FastAPI:
                     "type": "status",
                     "stage": "ready",
                     "message": f"YOLO + ByteTrack em {compute_label}. {jev_message}",
-                    "jev_enabled": coordinator is not None,
+                    "yolo_enabled": yolo_enabled,
+                    "jev_enabled": jev_enabled,
+                    "jev_available": jev_available,
                     "inference_size": inference_size,
                     "compute": compute_label,
                 },
             )
             next_timestamp_ms: int | None = None
+            next_request_id: int | None = None
             while True:
                 message = await websocket.receive()
                 if message.get("type") == "websocket.disconnect":
@@ -192,9 +199,36 @@ def create_app() -> FastAPI:
                         break
                     if control.get("type") == "frame_meta":
                         next_timestamp_ms = max(0, int(control.get("timestamp_ms", 0)))
+                        next_request_id = control.get("request_id")
+                    if control.get("type") == "set_analysis":
+                        yolo_enabled = bool(control.get("yolo_enabled", yolo_enabled))
+                        requested_jev = bool(control.get("jev_enabled", jev_enabled))
+                        jev_enabled = requested_jev and jev_available
+                        next_timestamp_ms = None
+                        next_request_id = None
+                        if not jev_enabled and pending_decision is not None and not pending_decision.done():
+                            pending_decision.cancel()
+                            pending_decision = None
+                        await _send(
+                            websocket,
+                            send_lock,
+                            {
+                                "type": "analysis_state",
+                                "yolo_enabled": yolo_enabled,
+                                "jev_enabled": jev_enabled,
+                                "jev_available": jev_available,
+                                "message": (
+                                    "YOLO ativo; Jev ativo"
+                                    if yolo_enabled and jev_enabled
+                                    else "YOLO ativo; Jev desativado"
+                                    if yolo_enabled
+                                    else "YOLO desativado; captura pausada"
+                                ),
+                            },
+                        )
                     continue
                 data = message.get("bytes")
-                if data is None or next_timestamp_ms is None:
+                if data is None or next_timestamp_ms is None or not yolo_enabled:
                     continue
 
                 if pending_decision is not None and pending_decision.done():
@@ -210,6 +244,7 @@ def create_app() -> FastAPI:
                         {
                             "type": "frame",
                             "frame_index": output.frame_index,
+                            "request_id": next_request_id,
                             "people_count": output.people_count,
                             "inference_ms": round(output.inference_ms, 1),
                             "overlay": _overlay_json(output.perception_frame),
@@ -221,7 +256,8 @@ def create_app() -> FastAPI:
                         },
                     )
                     if (
-                        coordinator is not None
+                        jev_enabled
+                        and coordinator is not None
                         and output.world_state is not None
                         and pending_decision is None
                         and coordinator.is_due(output.world_state)
@@ -251,6 +287,7 @@ def create_app() -> FastAPI:
                     )
                 finally:
                     next_timestamp_ms = None
+                    next_request_id = None
         except WebSocketDisconnect:
             pass
         # Keep an unexpected session failure isolated from the ASGI server.

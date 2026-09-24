@@ -15,6 +15,10 @@ def _person(
     height: float = 100.0,
     wrist_offset: float = 0.0,
     wrist_x_offset: float = 0.0,
+    left_wrist_x_offset: float | None = None,
+    right_wrist_x_offset: float | None = None,
+    pose_scale: float = 1.0,
+    visible_names: frozenset[str] | None = None,
     confidence: float = 0.9,
     pose: bool = True,
 ) -> TrackedPerson:
@@ -23,8 +27,18 @@ def _person(
         points = tuple(
             PoseKeypoint(
                 name,
-                x + offset_x + (wrist_x_offset if "wrist" in name else 0.0),
-                offset_y + wrist_offset if "wrist" in name else offset_y,
+                x
+                + offset_x * pose_scale
+                + (
+                    left_wrist_x_offset
+                    if name == "left_wrist" and left_wrist_x_offset is not None
+                    else right_wrist_x_offset
+                    if name == "right_wrist" and right_wrist_x_offset is not None
+                    else wrist_x_offset
+                    if "wrist" in name
+                    else 0.0
+                ),
+                offset_y * pose_scale + wrist_offset if "wrist" in name else offset_y * pose_scale,
                 confidence,
             )
             for name, offset_x, offset_y in (
@@ -42,6 +56,7 @@ def _person(
                 ("left_ankle", 40.0, 120.0),
                 ("right_ankle", 60.0, 120.0),
             )
+            if visible_names is None or name in visible_names
         )
     return TrackedPerson(
         track_id=track_id,
@@ -57,7 +72,11 @@ def _frame(timestamp_ms: int, *people: TrackedPerson) -> PerceptionFrame:
 
 def _pipeline(**changes: float) -> TemporalFeaturePipeline:
     config = FeatureConfig(
-        world_state_interval_seconds=0.0, minimum_track_age_seconds=0.0, **changes
+        world_state_interval_seconds=0.0,
+        minimum_track_age_seconds=0.0,
+        minimum_interaction_track_age_seconds=0.0,
+        minimum_pair_observation_seconds=0.0,
+        **changes,
     )
     return TemporalFeaturePipeline(config)
 
@@ -75,8 +94,10 @@ def test_first_sample_is_missing_and_stationary_sample_is_observed_zero() -> Non
 def test_linear_speed_is_scale_normalized_and_global_translation_is_not_arm_motion() -> None:
     large = _pipeline()
     small = _pipeline()
-    large.update(_frame(0, _person(1, 0.0, height=200.0)))
-    large_state = large.update(_frame(1_000, _person(1, 100.0, height=200.0)))
+    large.update(_frame(0, _person(1, 0.0, height=200.0, pose_scale=2.0)))
+    large_state = large.update(
+        _frame(1_000, _person(1, 100.0, height=200.0, pose_scale=2.0))
+    )
     small.update(_frame(0, _person(1, 0.0, height=100.0)))
     small_state = small.update(_frame(1_000, _person(1, 50.0, height=100.0)))
     assert large_state is not None and small_state is not None

@@ -27,6 +27,7 @@
     .dot.live { background:var(--green); box-shadow:0 0 12px var(--green); }
     .toolbar { display:flex; flex-wrap:wrap; gap:10px; padding:14px; border:1px solid var(--line);
       background:#0b1722cc; border-radius:16px; margin-bottom:16px; box-shadow:var(--shadow); }
+    .toolbar-group { display:flex; align-items:center; gap:8px; }
     .btn { border:1px solid var(--line); color:var(--text); background:#142536; padding:10px 15px;
       border-radius:10px; cursor:pointer; transition:.18s ease; }
     .btn:hover { transform:translateY(-1px); border-color:#3b5c78; } .btn.primary { background:#167da7; border-color:#249fcf; }
@@ -43,6 +44,23 @@
     #sourceVideo { display:block; width:100%; height:100%; object-fit:contain; }
     #overlayCanvas { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
     #captureCanvas { display:none; }
+    .session-controls { width:100%; padding:12px 14px 14px; background:linear-gradient(180deg,#0c1a28,#0a151f);
+      border-top:1px solid var(--line); }
+    .control-row, .analysis-controls { display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
+    .control-row { margin-bottom:10px; }
+    .control-row button, .analysis-controls button { border:1px solid var(--line); color:var(--text); background:#142536;
+      border-radius:8px; padding:7px 10px; cursor:pointer; }
+    .control-row button:hover, .analysis-controls button:hover { border-color:#4a789c; }
+    .control-row button:disabled, .analysis-controls button:disabled { opacity:.42; cursor:not-allowed; }
+    .timeline-control { display:flex; align-items:center; gap:8px; flex:1 1 260px; min-width:220px; color:var(--muted); font-size:11px; }
+    #timeline { flex:1; accent-color:var(--cyan); cursor:pointer; }
+    #timeValue { min-width:86px; text-align:right; font:11px ui-monospace,monospace; color:var(--text); }
+    .speed-control { display:flex; align-items:center; gap:6px; color:var(--muted); font-size:11px; }
+    .speed-control select { border:1px solid var(--line); color:var(--text); background:#142536; border-radius:8px; padding:6px 8px; }
+    .analysis-controls { border-top:1px solid #1b2d3d; padding-top:10px; }
+    .control-label { color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:.11em; margin-right:2px; }
+    .analysis-toggle.active { border-color:#2caa81; color:#a9f4d2; background:#10352c; }
+    .analysis-toggle.off { color:#aebdca; background:#101b26; }
     .empty { text-align:center; color:var(--muted); max-width:390px; padding:35px; }
     .empty .icon { font-size:46px; margin-bottom:8px; }
     .hud { position:absolute; left:14px; bottom:14px; display:flex; gap:8px; flex-wrap:wrap; }
@@ -71,6 +89,7 @@
     .logline { border-bottom:1px solid #172635; padding:5px 0; } .time { color:#57728b; }
     .hidden { display:none !important; } .note { margin-left:auto; color:var(--muted); align-self:center; font-size:12px; }
     @media(max-width:980px){ .grid{grid-template-columns:1fr}.stage{min-height:390px}.logs{grid-column:auto}.note{width:100%;margin:0} }
+    @media(max-width:620px){ .shell{width:min(100% - 18px, 1500px);padding-top:12px}.toolbar{padding:10px}.toolbar-group{width:100%}.toolbar-group .btn,.toolbar-group .select{flex:1}.timeline-control{flex-basis:100%;min-width:0;order:3}.speed-control{margin-left:auto}.session-controls{padding:10px}.hud{left:8px;bottom:8px;gap:5px}.chip{font-size:11px;padding:5px 7px} }
   </style>
 </head>
 <body>
@@ -81,17 +100,9 @@
   </header>
 
   <section class="toolbar">
-    <button id="cameraBtn" class="btn primary">▶ Usar câmera</button>
-    <label for="fileInput" class="btn">＋ Anexar vídeo</label>
-    <input id="fileInput" type="file" accept="video/*">
-    <button id="stopBtn" class="btn danger" disabled>■ Encerrar</button>
-    <button id="soundBtn" class="btn">🔕 Alertas sonoros: OFF</button>
-    <select id="profileSelect" class="select" title="Equilíbrio entre velocidade e precisão">
-      <option value="speed">Velocidade</option>
-      <option value="balanced" selected>Equilibrado · recomendado</option>
-      <option value="precision">Precisão</option>
-    </select>
-    <span class="note">Reprodução em 1×; se a IA estiver ocupada, ela recebe o frame mais recente sem atrasar o vídeo.</span>
+    <div class="toolbar-group"><button id="cameraBtn" class="btn primary">▶ Usar câmera</button><label for="fileInput" class="btn">＋ Anexar vídeo</label><input id="fileInput" type="file" accept="video/*"><button id="stopBtn" class="btn danger" disabled>■ Encerrar</button></div>
+    <div class="toolbar-group"><button id="soundBtn" class="btn">🔕 Alertas sonoros: OFF</button><select id="profileSelect" class="select" title="Equilíbrio entre velocidade e precisão"><option value="speed">Velocidade</option><option value="balanced" selected>Equilibrado · recomendado</option><option value="precision">Precisão</option></select></div>
+    <span class="note">Use os controles sob o vídeo para pausar, buscar um instante e ajustar a velocidade.</span>
   </section>
 
   <div class="grid">
@@ -105,6 +116,14 @@
         </div>
         <canvas id="captureCanvas"></canvas>
         <div class="hud"><span id="frameChip" class="chip">frame —</span><span id="personChip" class="chip">0 pessoas</span><span id="jevChip" class="chip">Jev aguardando</span></div>
+      </div>
+      <div id="sessionControls" class="session-controls hidden">
+        <div id="videoControls" class="control-row hidden">
+          <button id="playToggle" type="button">▶ Reproduzir</button>
+          <label class="timeline-control" for="timeline"><span>Tempo</span><input id="timeline" type="range" min="0" max="0" step="0.01" value="0"><span id="timeValue">0:00 / 0:00</span></label>
+          <label class="speed-control" for="speedSelect"><span>Velocidade</span><select id="speedSelect"><option value="0.25">0,25×</option><option value="0.5">0,5×</option><option value="1" selected>1×</option><option value="1.5">1,5×</option><option value="2">2×</option></select></label>
+        </div>
+        <div class="analysis-controls"><span class="control-label">Camadas de análise</span><button id="yoloToggle" class="analysis-toggle active" type="button">YOLO: ON</button><button id="jevToggle" class="analysis-toggle off" type="button" disabled>Jev: indisponível</button></div>
       </div>
     </section>
 
@@ -154,6 +173,7 @@
   let socket = null, stream = null, running = false, ready = false, waiting = false;
   let sourceMode = null, soundEnabled = false, lastFrameAt = 0, startedAt = 0, lastDangerAt = 0, frameIntervals = [];
   let sourceEnded = false, decisionPending = false, finishTimer = null;
+  let yoloEnabled = true, jevEnabled = false, jevAvailable = false, requestSequence = 0, pendingRequestId = 0, resumeAfterSeek = false;
 
   function log(message, kind='info') {
     const row = document.createElement('div'); row.className = 'logline';
@@ -173,7 +193,7 @@
   }
   async function startFile(file) {
     stopSession(); if (!file) return;
-    video.srcObject=null; video.src=URL.createObjectURL(file); video.loop=false; video.playbackRate=1;
+    video.srcObject=null; video.src=URL.createObjectURL(file); video.loop=false; video.playbackRate=1; $('speedSelect').value='1';
     try {
       await new Promise((resolve,reject)=>{
         if(video.readyState>=1){resolve();return;}
@@ -186,25 +206,28 @@
   }
   function startSession(mode,label) {
     sourceMode=mode; running=true; ready=false; waiting=false; sourceEnded=false; decisionPending=false;
+    yoloEnabled=true; jevEnabled=false; jevAvailable=false; requestSequence=0; pendingRequestId=0;
     startedAt=performance.now(); frameIntervals=[];
     $('sourceLabel').textContent=label; $('stopBtn').disabled=false; $('cameraBtn').disabled=true;
     $('profileSelect').disabled=true; $('empty').classList.add('hidden'); $('videoWrap').style.display='block';
+    $('sessionControls').classList.remove('hidden'); $('videoControls').classList.toggle('hidden',mode!=='video'); updateAnalysisControls(); updateTimeline();
     $('videoWrap').style.aspectRatio=`${video.videoWidth||16} / ${video.videoHeight||9}`; setStatus('Conectando…');
     const protocol=location.protocol==='https:'?'wss':'ws'; socket=new WebSocket(`${protocol}://${location.host}/ws/analyze`);
-    socket.onopen=()=>socket.send(JSON.stringify({type:'start',source:mode,profile:$('profileSelect').value}));
+    socket.onopen=()=>socket.send(JSON.stringify({type:'start',source:mode,profile:$('profileSelect').value,yolo_enabled:true,jev_enabled:true}));
     socket.onmessage=event=>handleMessage(JSON.parse(event.data));
     socket.onerror=()=>{ setStatus('Erro de conexão'); log('Falha no WebSocket','erro'); };
     socket.onclose=()=>{ if(running){setStatus('Conexão encerrada'); log('Servidor encerrou a sessão','aviso');} };
     log(`Fonte iniciada: ${label}`);
   }
   function stopSession() {
-    running=false; ready=false; waiting=false; sourceEnded=false; decisionPending=false;
+    running=false; ready=false; waiting=false; sourceEnded=false; decisionPending=false; yoloEnabled=true; jevEnabled=false; jevAvailable=false;
     if(finishTimer){clearTimeout(finishTimer);finishTimer=null;}
     if(socket && socket.readyState===WebSocket.OPEN){socket.send(JSON.stringify({type:'stop'}));socket.close();}
     socket=null; if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
     video.pause(); video.srcObject=null; if(video.src){URL.revokeObjectURL(video.src);video.removeAttribute('src');}
     $('stopBtn').disabled=true; $('cameraBtn').disabled=false; $('profileSelect').disabled=false; $('sourceLabel').textContent='sem fonte';
     $('videoWrap').style.display='none'; overlayCtx.clearRect(0,0,overlay.width,overlay.height); $('empty').classList.remove('hidden'); setStatus('Aguardando fonte');
+    $('sessionControls').classList.add('hidden'); $('videoControls').classList.add('hidden'); updateTimeline();
   }
   function finishVideoWhenIdle() {
     if(sourceMode!=='video'||!sourceEnded||waiting||decisionPending||finishTimer)return;
@@ -214,30 +237,36 @@
     },600);
   }
   function captureNext() {
-    if(!running||!ready||waiting||!socket||socket.readyState!==WebSocket.OPEN) return;
+    if(!running||!ready||!yoloEnabled||waiting||!socket||socket.readyState!==WebSocket.OPEN) return;
     if(video.readyState<2){setTimeout(captureNext,80);return;}
     const limits={speed:640,balanced:720,precision:960}, max=limits[$('profileSelect').value];
     const ratio=Math.min(1,max/video.videoWidth); canvas.width=Math.round(video.videoWidth*ratio); canvas.height=Math.round(video.videoHeight*ratio);
     ctx.drawImage(video,0,0,canvas.width,canvas.height); waiting=true;
-    const timestamp=sourceMode==='video'?Math.round(video.currentTime*1000):Math.round(performance.now()-startedAt);
-    canvas.toBlob(async blob=>{ if(!blob||!running){waiting=false;return;} socket.send(JSON.stringify({type:'frame_meta',timestamp_ms:timestamp})); socket.send(await blob.arrayBuffer()); },'image/jpeg',.72);
+    const timestamp=sourceMode==='video'?Math.round(video.currentTime*1000):Math.round(performance.now()-startedAt), requestId=++requestSequence; pendingRequestId=requestId;
+    canvas.toBlob(async blob=>{ if(!blob||!running||!yoloEnabled){waiting=false;return;} socket.send(JSON.stringify({type:'frame_meta',timestamp_ms:timestamp,request_id:requestId})); socket.send(await blob.arrayBuffer()); },'image/jpeg',.72);
   }
   async function handleMessage(msg) {
     if(msg.type==='status') {
       setStatus(msg.message,msg.stage==='ready'); log(msg.message);
       if(msg.stage==='ready'){
-        ready=true;$('jevChip').textContent=msg.jev_enabled?'Jev ativo':'Jev desativado';log(`Inferência: ${msg.compute} · ${msg.inference_size}px`);
+        ready=true; yoloEnabled=msg.yolo_enabled!==false; jevAvailable=Boolean(msg.jev_available); jevEnabled=Boolean(msg.jev_enabled)&&jevAvailable; updateAnalysisControls(); $('jevChip').textContent=jevEnabled?'Jev ativo':'Jev desativado'; log(`Inferência: ${msg.compute} · ${msg.inference_size}px`);
         if(sourceMode==='video'){
           try { await video.play(); } catch(e) { log(`Não foi possível reproduzir o vídeo: ${e.message}`,'erro'); stopSession(); return; }
         }
         captureNext();
       }
     } else if(msg.type==='frame') {
+      const currentFrame=msg.request_id==null||msg.request_id===pendingRequestId; waiting=false; if(!currentFrame){requestAnimationFrame(captureNext);return;}
       drawOverlay(msg.overlay); $('frameChip').textContent=`frame ${msg.frame_index}`;
       $('personChip').textContent=`${msg.people_count} pessoa${msg.people_count===1?'':'s'}`; $('latencyMetric').textContent=`${msg.inference_ms} ms`;
       const now=performance.now(); if(lastFrameAt){frameIntervals.push(now-lastFrameAt);if(frameIntervals.length>15)frameIntervals.shift();$('fpsMetric').textContent=(1000/(frameIntervals.reduce((a,b)=>a+b,0)/frameIntervals.length)).toFixed(1);} lastFrameAt=now;
       if(msg.world_state){$('worldLog').textContent=pretty(msg.world_state); updateCoverage(msg.world_state); log(`WorldState ${msg.world_state.observed_at_ms} ms · ${msg.world_state.people.length} pessoa(s)`);}
-      waiting=false; requestAnimationFrame(captureNext); finishVideoWhenIdle();
+      requestAnimationFrame(captureNext); finishVideoWhenIdle();
+    } else if(msg.type==='analysis_state') {
+      yoloEnabled=Boolean(msg.yolo_enabled); jevAvailable=Boolean(msg.jev_available); jevEnabled=Boolean(msg.jev_enabled)&&jevAvailable; updateAnalysisControls();
+      setStatus(msg.message||'Preferências de análise atualizadas',yoloEnabled);
+      if(!yoloEnabled){ waiting=false; overlayCtx.setTransform(1,0,0,1,0,0); overlayCtx.clearRect(0,0,overlay.width,overlay.height); $('personChip').textContent='—'; }
+      $('jevChip').textContent=jevEnabled?'Jev ativo':(jevAvailable?'Jev desativado':'Jev indisponível'); log(msg.message||'Preferências de análise atualizadas');
     } else if(msg.type==='decision_started') {
       decisionPending=true; if(finishTimer){clearTimeout(finishTimer);finishTimer=null;}
       $('jevChip').textContent='Jev analisando…'; log(`Jev recebeu WorldState de ${msg.observed_at_ms} ms`,'jev');
@@ -252,9 +281,28 @@
     } else if(msg.type==='frame_error') { waiting=false; log(msg.message,'erro de frame'); setTimeout(captureNext,120); finishVideoWhenIdle();
     } else if(msg.type==='fatal') { log(msg.message,'fatal'); stopSession(); setStatus('Falha'); }
   }
+  function updateAnalysisControls() {
+    const yolo=$('yoloToggle'), jev=$('jevToggle'); yolo.classList.toggle('active',yoloEnabled); yolo.classList.toggle('off',!yoloEnabled); yolo.textContent=`YOLO: ${yoloEnabled?'ON':'OFF'}`;
+    jev.disabled=!jevAvailable; jev.classList.toggle('active',jevEnabled); jev.classList.toggle('off',!jevEnabled); jev.textContent=jevAvailable?`Jev: ${jevEnabled?'ON':'OFF'}`:'Jev: indisponível';
+  }
+  function sendAnalysisState() { if(socket&&socket.readyState===WebSocket.OPEN) socket.send(JSON.stringify({type:'set_analysis',yolo_enabled:yoloEnabled,jev_enabled:jevEnabled})); }
+  function formatTime(value) { if(!Number.isFinite(value)||value<0)value=0; const m=Math.floor(value/60), s=Math.floor(value%60); return `${m}:${String(s).padStart(2,'0')}`; }
+  function updateTimeline() { if(sourceMode!=='video'){ $('timeValue').textContent='Ao vivo'; return; } const duration=Number.isFinite(video.duration)?video.duration:0; $('timeline').max=duration; $('timeline').value=Math.min(video.currentTime||0,duration); $('timeValue').textContent=`${formatTime(video.currentTime)} / ${formatTime(duration)}`; $('playToggle').textContent=video.paused?'▶ Reproduzir':'⏸ Pausar'; }
   const skeleton=[['nose','left_eye'],['nose','right_eye'],['left_eye','left_ear'],['right_eye','right_ear'],['left_shoulder','right_shoulder'],['left_shoulder','left_elbow'],['left_elbow','left_wrist'],['right_shoulder','right_elbow'],['right_elbow','right_wrist'],['left_shoulder','left_hip'],['right_shoulder','right_hip'],['left_hip','right_hip'],['left_hip','left_knee'],['left_knee','left_ankle'],['right_hip','right_knee'],['right_knee','right_ankle']];
+  function containRect(boxWidth, boxHeight, sourceWidth, sourceHeight) {
+    const scale=Math.min(boxWidth/sourceWidth,boxHeight/sourceHeight);
+    const width=sourceWidth*scale, height=sourceHeight*scale;
+    return {left:(boxWidth-width)/2, top:(boxHeight-height)/2, width, height};
+  }
   function drawOverlay(data) {
-    overlay.width=data.width; overlay.height=data.height; overlayCtx.clearRect(0,0,overlay.width,overlay.height);
+    overlay.width=data.width; overlay.height=data.height;
+    overlayCtx.setTransform(1,0,0,1,0,0); overlayCtx.clearRect(0,0,overlay.width,overlay.height);
+    // The video uses object-fit:contain. Map source pixels into the actual visible
+    // video rectangle so letterboxing/max-height never shifts the detections.
+    const boxWidth=overlay.clientWidth||overlay.width, boxHeight=overlay.clientHeight||overlay.height;
+    const fitted=containRect(boxWidth,boxHeight,data.width,data.height);
+    const scaleX=fitted.width/boxWidth, scaleY=fitted.height/boxHeight;
+    overlayCtx.setTransform(scaleX,0,0,scaleY,fitted.left/boxWidth*data.width,fitted.top/boxHeight*data.height);
     const line=Math.max(2,data.width/400); overlayCtx.lineWidth=line; overlayCtx.font=`bold ${Math.max(13,data.width/55)}px ui-monospace`;
     data.persons.forEach(person=>{
       const color=`hsl(${(person.track_id*67)%360} 92% 62%)`, points={};
@@ -286,7 +334,15 @@
   }
   $('cameraBtn').onclick=startCamera; $('stopBtn').onclick=stopSession;
   $('fileInput').onchange=e=>startFile(e.target.files[0]);
-  video.onended=()=>{ if(sourceMode==='video'){sourceEnded=true;ready=false;setStatus('Finalizando análise…',true);log('Fim da reprodução; aguardando a análise pendente');finishVideoWhenIdle();} };
+  video.onended=()=>{ if(sourceMode==='video'){sourceEnded=true;setStatus('Finalizando análise…',true);log('Fim da reprodução; aguardando a análise pendente');updateTimeline();finishVideoWhenIdle();} };
+  video.ontimeupdate=updateTimeline; video.ondurationchange=updateTimeline; video.onplay=updateTimeline; video.onpause=updateTimeline; video.onratechange=updateTimeline;
+  $('playToggle').onclick=async()=>{ if(sourceMode!=='video')return; if(video.paused){try{await video.play();}catch(e){log(`Não foi possível reproduzir: ${e.message}`,'erro');}}else video.pause(); updateTimeline(); };
+  $('timeline').onpointerdown=()=>{ resumeAfterSeek=!video.paused; video.pause(); };
+  $('timeline').oninput=()=>{ if(sourceMode!=='video')return; if(finishTimer){clearTimeout(finishTimer);finishTimer=null;} sourceEnded=false; ready=Boolean(socket&&socket.readyState===WebSocket.OPEN); const value=Number($('timeline').value); video.currentTime=value; updateTimeline(); pendingRequestId=++requestSequence; waiting=false; if(yoloEnabled)requestAnimationFrame(captureNext); };
+  $('timeline').onchange=()=>{ if(resumeAfterSeek){video.play().catch(()=>{});} resumeAfterSeek=false; updateTimeline(); };
+  $('speedSelect').onchange=()=>{ video.playbackRate=Number($('speedSelect').value); log(`Velocidade de reprodução: ${video.playbackRate}×`); updateTimeline(); };
+  $('yoloToggle').onclick=()=>{ yoloEnabled=!yoloEnabled; if(!yoloEnabled){waiting=false;pendingRequestId=++requestSequence;overlayCtx.setTransform(1,0,0,1,0,0);overlayCtx.clearRect(0,0,overlay.width,overlay.height);} updateAnalysisControls(); sendAnalysisState(); if(yoloEnabled)requestAnimationFrame(captureNext); };
+  $('jevToggle').onclick=()=>{ if(!jevAvailable)return; jevEnabled=!jevEnabled; updateAnalysisControls(); sendAnalysisState(); };
   $('soundBtn').onclick=async()=>{soundEnabled=!soundEnabled;if(soundEnabled&&'Notification'in window&&Notification.permission==='default')await Notification.requestPermission();$('soundBtn').textContent=soundEnabled?'🔔 Alertas sonoros: ON':'🔕 Alertas sonoros: OFF';};
   document.querySelectorAll('.tab').forEach(tab=>tab.onclick=()=>{document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));tab.classList.add('active');document.querySelectorAll('.logbody').forEach(x=>x.classList.add('hidden'));$(tab.dataset.target).classList.remove('hidden');});
   window.addEventListener('beforeunload',stopSession);

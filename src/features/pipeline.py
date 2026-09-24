@@ -1,6 +1,6 @@
 """Deterministic, bounded temporal feature extraction from perception contracts.
 
-Initial engineering defaults below require calibration with recorded camera data. Image-space
+Initial engineering defaults below require calibration with recorded camera data. Skeleton-scale
 normalization reduces, but does not remove, perspective effects. Bbox IoU is visual overlap, not
 physical contact; normalized 2D distance is not physical distance. Pose confidence degrades under
 occlusion, track IDs can switch, and local pose motion remains sensitive to detector noise.
@@ -12,13 +12,13 @@ from collections import deque
 from dataclasses import dataclass
 from itertools import pairwise
 from math import isfinite
+from statistics import median
 
 from contracts import InteractionFeatures, PerceptionFrame, PersonFeatures, WorldState
 from contracts.perception import BoundingBox, TrackedPerson
 
 from .geometry import (
     Point,
-    bounding_box_center,
     bounding_box_height,
     bounding_box_iou,
     bounding_box_width,
@@ -28,6 +28,7 @@ from .geometry import (
 
 TORSO_KEYPOINTS = frozenset({"left_shoulder", "right_shoulder", "left_hip", "right_hip"})
 ARM_KEYPOINTS = frozenset({"left_elbow", "right_elbow", "left_wrist", "right_wrist"})
+WRIST_KEYPOINTS = frozenset({"left_wrist", "right_wrist"})
 BODY_KEYPOINTS = frozenset(
     {
         "left_shoulder",
@@ -45,6 +46,17 @@ BODY_KEYPOINTS = frozenset(
     }
 )
 HEAD_KEYPOINTS = frozenset({"nose", "left_eye", "right_eye", "left_ear", "right_ear"})
+SKELETON_BODY_SCALE_FACTORS = {
+    # Approximate each visible segment as a fraction of standing body height. The median of all
+    # available estimates makes the scale usable when legs or the lower bounding box are cropped.
+    "torso_length": 2.5,
+    "shoulder_width": 10.0 / 3.0,
+    "hip_width": 5.0,
+    "left_upper_arm": 4.472135955,
+    "right_upper_arm": 4.472135955,
+    "left_forearm": 4.8507125,
+    "right_forearm": 4.8507125,
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,12 +79,19 @@ class FeatureConfig:
     interaction_ttl_seconds: float = 2.0
     world_state_interval_seconds: float = 0.25
     minimum_track_age_seconds: float = 0.25
+    minimum_interaction_track_age_seconds: float = 0.50
+    minimum_pair_observation_seconds: float = 0.15
     interaction_window_seconds: float = 2.0
     rapid_approach_window_seconds: float = 0.75
     rapid_approach_speed_threshold: float = 0.50
     interaction_proximity_threshold: float = 1.50
-    contact_distance_threshold: float = 0.32
-    aggressive_arm_speed_threshold: float = 0.80
+    head_contact_distance_threshold: float = 0.28
+    torso_contact_distance_threshold: float = 0.22
+    aggressive_arm_speed_threshold: float = 1.50
+    torso_arm_speed_threshold: float = 2.10
+    contact_approach_speed_threshold: float = 0.80
+    torso_approach_speed_threshold: float = 1.10
+    interaction_scale_ratio_threshold: float = 0.70
     repeated_motion_min_peaks: int = 2
     fallen_bbox_aspect_ratio: float = 0.90
 
@@ -82,25 +101,44 @@ class _TrackSample:
     timestamp_ms: int
     center: Point | None
     height: float | None
+    body_scale: float | None
     bbox: BoundingBox
     global_points: dict[str, Point]
     local_points: dict[str, Point]
     raw_speed: float | None
     smoothed_speed: float | None
     arm_motion: float | None
+    wrist_motion: dict[str, float]
+    pose_scales: dict[str, float]
     smoothed_arm_motion: float | None
     body_motion: float | None
     smoothed_body_motion: float | None
 
 
 @dataclass(frozen=True, slots=True)
+class _WristTargetSample:
+    name: str
+    motion: float | None
+    head_distance: float | None
+    torso_distance: float | None
+
+
+@dataclass(frozen=True, slots=True)
 class _PairSample:
     timestamp_ms: int
     distance: float | None
-    wrist_to_head_distance: float | None
-    wrist_to_torso_distance: float | None
+    first_to_second: tuple[_WristTargetSample, ...]
+    second_to_first: tuple[_WristTargetSample, ...]
     bbox_overlap: float | None
-    arm_motion_peak: float | None
+    scale_compatible: bool | None
+
+
+@dataclass(frozen=True, slots=True)
+class _ContactEvidence:
+    first_head: bool | None
+    first_torso: bool | None
+    second_head: bool | None
+    second_torso: bool | None
 
 
 @dataclass(slots=True)
@@ -154,6 +192,64 @@ def _valid_points(person: TrackedPerson, confidence: float) -> dict[str, Point]:
     }
 
 
+def _midpoint(first: Point | None, second: Point | None) -> Point | None:
+    if first is None or second is None:
+        return None
+    return ((first[0] + second[0]) / 2.0, (first[1] + second[1]) / 2.0)
+
+
+def _pose_scales(points: dict[str, Point]) -> dict[str, float]:
+    """Return comparable body segments, retaining useful scale for partially visible people."""
+
+    shoulders = _midpoint(points.get("left_shoulder"), points.get("right_shoulder"))
+    hips = _midpoint(points.get("left_hip"), points.get("right_hip"))
+    candidates = {
+        "torso_length": euclidean_distance(shoulders, hips),
+        "shoulder_width": euclidean_distance(
+            points.get("left_shoulder"), points.get("right_shoulder")
+        ),
+        "hip_width": euclidean_distance(points.get("left_hip"), points.get("right_hip")),
+        "left_upper_arm": euclidean_distance(
+            points.get("left_shoulder"), points.get("left_elbow")
+        ),
+        "right_upper_arm": euclidean_distance(
+            points.get("right_shoulder"), points.get("right_elbow")
+        ),
+        "left_forearm": euclidean_distance(points.get("left_elbow"), points.get("left_wrist")),
+        "right_forearm": euclidean_distance(
+            points.get("right_elbow"), points.get("right_wrist")
+        ),
+    }
+    return {
+        name: value
+        for name, value in candidates.items()
+        if value is not None and value > 0.0 and isfinite(value)
+    }
+
+
+def _skeleton_center(points: dict[str, Point]) -> Point | None:
+    """Return a crop-resistant body center from torso anchors or other visible body points."""
+
+    torso = [point for name, point in points.items() if name in TORSO_KEYPOINTS]
+    candidates = torso if len(torso) >= 2 else list(points.values())
+    center_x = safe_mean(point[0] for point in candidates)
+    center_y = safe_mean(point[1] for point in candidates)
+    if center_x is None or center_y is None:
+        return None
+    return (center_x, center_y)
+
+
+def _estimated_body_scale(scales: dict[str, float]) -> float | None:
+    """Estimate full-body image scale from whichever reliable skeleton segments are visible."""
+
+    estimates = [
+        value * SKELETON_BODY_SCALE_FACTORS[name]
+        for name, value in scales.items()
+        if name in SKELETON_BODY_SCALE_FACTORS
+    ]
+    return float(median(estimates)) if estimates else None
+
+
 def _mean_local_motion(
     current: dict[str, Point],
     previous: dict[str, Point],
@@ -179,9 +275,9 @@ def _finite_max(values: list[float | None]) -> float | None:
 class TemporalFeaturePipeline:
     """Concrete `contracts.FeaturePipeline` implementation.
 
-    Global motion uses bbox centers consistently. Speeds are body-heights/second; local wrist and
-    body motion use torso-relative keypoints in body-heights/second. Pair distance has body-heights
-    units, and bbox overlap is IoU in [0, 1].
+    Global motion uses skeleton centers and skeleton-derived scale. Speeds are estimated
+    body-scales per second; local wrist and body motion use torso-relative keypoints in the same
+    units. Pair distance is skeleton-scale normalized, and bbox overlap is IoU in [0, 1].
     """
 
     def __init__(self, config: FeatureConfig | None = None) -> None:
@@ -229,10 +325,13 @@ class TemporalFeaturePipeline:
             self._track_first_seen_ms[track_id] = timestamp_ms
         elif track_id not in self._track_first_seen_ms:
             self._track_first_seen_ms[track_id] = timestamp_ms
-        center = bounding_box_center(person.bounding_box)
         height = bounding_box_height(person.bounding_box)
+        global_points = _valid_points(person, self.config.minimum_keypoint_confidence)
+        center = _skeleton_center(global_points)
+        pose_scales = _pose_scales(global_points)
+        body_scale = _estimated_body_scale(pose_scales)
         dt = _valid_dt(timestamp_ms, previous.timestamp_ms, self.config) if previous else None
-        scale = safe_mean((height, previous.height)) if previous else None
+        scale = safe_mean((body_scale, previous.body_scale)) if previous else None
         raw_speed = _normalized_motion(center, previous.center if previous else None, scale, dt)
         smoothed_speed = _ema(
             raw_speed, previous.smoothed_speed if previous else None, self.config.speed_ema_alpha
@@ -241,6 +340,19 @@ class TemporalFeaturePipeline:
         arm_motion = _mean_local_motion(
             local, previous.local_points if previous else {}, ARM_KEYPOINTS, scale, dt
         )
+        wrist_motion = {
+            name: motion
+            for name in WRIST_KEYPOINTS
+            if (
+                motion := _normalized_motion(
+                    local.get(name),
+                    previous.local_points.get(name) if previous else None,
+                    scale,
+                    dt,
+                )
+            )
+            is not None
+        }
         body_motion = _mean_local_motion(
             local, previous.local_points if previous else {}, BODY_KEYPOINTS, scale, dt
         )
@@ -248,12 +360,15 @@ class TemporalFeaturePipeline:
             timestamp_ms=timestamp_ms,
             center=center,
             height=height,
+            body_scale=body_scale,
             bbox=person.bounding_box,
-            global_points=_valid_points(person, self.config.minimum_keypoint_confidence),
+            global_points=global_points,
             local_points=local,
             raw_speed=raw_speed,
             smoothed_speed=smoothed_speed,
             arm_motion=arm_motion,
+            wrist_motion=wrist_motion,
+            pose_scales=pose_scales,
             smoothed_arm_motion=_ema(
                 arm_motion,
                 previous.smoothed_arm_motion if previous else None,
@@ -323,25 +438,28 @@ class TemporalFeaturePipeline:
         interactions: list[InteractionFeatures] = []
         for index, first_id in enumerate(track_ids):
             for second_id in track_ids[index + 1 :]:
-                first, second = samples[first_id], samples[second_id]
-                distance = _normalized_motion(
-                    first.center, second.center, safe_mean((first.height, second.height)), 1.0
-                )
-                wrist_to_head = _finite_min(
-                    [
-                        self._wrist_to_points(first, second, HEAD_KEYPOINTS),
-                        self._wrist_to_points(second, first, HEAD_KEYPOINTS),
-                    ]
-                )
-                wrist_to_torso = _finite_min(
-                    [
-                        self._wrist_to_points(first, second, TORSO_KEYPOINTS),
-                        self._wrist_to_points(second, first, TORSO_KEYPOINTS),
-                    ]
-                )
-                overlap = bounding_box_iou(first.bbox, second.bbox)
-                arm_motion_peak = _finite_max([first.arm_motion, second.arm_motion])
                 key = (first_id, second_id)
+                minimum_age_ms = self.config.minimum_interaction_track_age_seconds * 1_000
+                if (
+                    timestamp_ms - self._track_first_seen_ms[first_id] < minimum_age_ms
+                    or timestamp_ms - self._track_first_seen_ms[second_id] < minimum_age_ms
+                ):
+                    self._pairs.pop(key, None)
+                    continue
+                first, second = samples[first_id], samples[second_id]
+                scale_compatible = self._scale_compatible(first, second)
+                if scale_compatible is not True:
+                    self._pairs.pop(key, None)
+                    continue
+                distance = _normalized_motion(
+                    first.center,
+                    second.center,
+                    safe_mean((first.body_scale, second.body_scale)),
+                    1.0,
+                )
+                first_to_second = self._wrist_target_samples(first, second)
+                second_to_first = self._wrist_target_samples(second, first)
+                overlap = bounding_box_iou(first.bbox, second.bbox)
                 pair = self._pairs.get(key)
                 if pair is None or _valid_dt(timestamp_ms, pair.last_seen_ms, self.config) is None:
                     pair = _PairHistory(
@@ -357,14 +475,19 @@ class TemporalFeaturePipeline:
                     _PairSample(
                         timestamp_ms,
                         distance,
-                        wrist_to_head,
-                        wrist_to_torso,
+                        first_to_second,
+                        second_to_first,
                         overlap,
-                        arm_motion_peak,
+                        scale_compatible,
                     )
                 )
                 pair.last_seen_ms = timestamp_ms
                 self._prune_pair_history(pair, timestamp_ms)
+                if (
+                    timestamp_ms - pair.started_at_ms
+                    < self.config.minimum_pair_observation_seconds * 1_000
+                ):
+                    continue
                 recent = self._recent_pair_samples(pair, timestamp_ms)
                 interactions.append(
                     InteractionFeatures(
@@ -373,10 +496,22 @@ class TemporalFeaturePipeline:
                         distance_between_people=distance,
                         rapid_approach=self._rapid_approach(pair, timestamp_ms),
                         wrist_to_head_distance=_finite_min(
-                            [item.wrist_to_head_distance for item in recent]
+                            [
+                                distance
+                                for item in recent
+                                for direction in (item.first_to_second, item.second_to_first)
+                                for wrist in direction
+                                for distance in (wrist.head_distance,)
+                            ]
                         ),
                         wrist_to_torso_distance=_finite_min(
-                            [item.wrist_to_torso_distance for item in recent]
+                            [
+                                distance
+                                for item in recent
+                                for direction in (item.first_to_second, item.second_to_first)
+                                for wrist in direction
+                                for distance in (wrist.torso_distance,)
+                            ]
                         ),
                         bbox_overlap=_finite_max([item.bbox_overlap for item in recent]),
                         possible_contact=self._possible_contact(recent),
@@ -401,7 +536,9 @@ class TemporalFeaturePipeline:
         samples = [
             sample
             for sample in pair.samples
-            if sample.timestamp_ms >= cutoff and sample.distance is not None
+            if sample.timestamp_ms >= cutoff
+            and sample.distance is not None
+            and sample.scale_compatible is True
         ]
         if len(samples) < 2:
             return None
@@ -416,56 +553,172 @@ class TemporalFeaturePipeline:
         )
 
     def _possible_contact(self, samples: list[_PairSample]) -> bool | None:
-        minimum = _finite_min(
-            [
-                distance
-                for sample in samples
-                for distance in (sample.wrist_to_head_distance, sample.wrist_to_torso_distance)
-            ]
+        evidence = [
+            self._contact_evidence(previous, current) for previous, current in pairwise(samples)
+        ]
+        if any(item.first_head is True or item.second_head is True for item in evidence):
+            return True
+        torso_peaks = 0
+        torso_was_high = False
+        for item in evidence:
+            torso_is_high = item.first_torso is True or item.second_torso is True
+            if torso_is_high and not torso_was_high:
+                torso_peaks += 1
+            torso_was_high = torso_is_high
+        # One smooth torso reach is too ambiguous: hugs and greetings routinely produce it.
+        # Repeated forceful entries remain contact evidence even without a head-directed motion.
+        if torso_peaks >= self.config.repeated_motion_min_peaks:
+            return True
+        measured = any(
+            value is not None
+            for item in evidence
+            for value in (
+                item.first_head,
+                item.first_torso,
+                item.second_head,
+                item.second_torso,
+            )
         )
-        return None if minimum is None else minimum <= self.config.contact_distance_threshold
+        return False if measured else None
+
+    def _contact_evidence(
+        self, previous: _PairSample, current: _PairSample
+    ) -> _ContactEvidence:
+        """Correlate each wrist with its own direction and target region across two frames."""
+
+        dt = _valid_dt(current.timestamp_ms, previous.timestamp_ms, self.config)
+        if dt is None or previous.scale_compatible is not True or current.scale_compatible is not True:
+            return _ContactEvidence(None, None, None, None)
+        results: list[tuple[bool | None, bool | None]] = []
+        for previous_direction, current_direction in (
+            (previous.first_to_second, current.first_to_second),
+            (previous.second_to_first, current.second_to_first),
+        ):
+            previous_by_name = {wrist.name: wrist for wrist in previous_direction}
+            head_measured = False
+            torso_measured = False
+            head_contact = False
+            torso_contact = False
+            for wrist in current_direction:
+                previous_wrist = previous_by_name.get(wrist.name)
+                if previous_wrist is None or wrist.motion is None:
+                    continue
+                if previous_wrist.head_distance is not None and wrist.head_distance is not None:
+                    head_measured = True
+                    head_approach = (previous_wrist.head_distance - wrist.head_distance) / dt
+                    head_contact = head_contact or (
+                        wrist.motion >= self.config.aggressive_arm_speed_threshold
+                        and wrist.head_distance <= self.config.head_contact_distance_threshold
+                        and head_approach >= self.config.contact_approach_speed_threshold
+                    )
+                if previous_wrist.torso_distance is not None and wrist.torso_distance is not None:
+                    torso_measured = True
+                    torso_approach = (
+                        previous_wrist.torso_distance - wrist.torso_distance
+                    ) / dt
+                    torso_contact = torso_contact or (
+                        wrist.motion >= self.config.torso_arm_speed_threshold
+                        and wrist.torso_distance <= self.config.torso_contact_distance_threshold
+                        and torso_approach >= self.config.torso_approach_speed_threshold
+                    )
+            results.append(
+                (
+                    head_contact if head_measured else None,
+                    torso_contact if torso_measured else None,
+                )
+            )
+        while len(results) < 2:
+            results.append((None, None))
+        return _ContactEvidence(
+            first_head=results[0][0],
+            first_torso=results[0][1],
+            second_head=results[1][0],
+            second_torso=results[1][1],
+        )
 
     def _repeated_aggressive_motion(self, samples: list[_PairSample]) -> bool | None:
-        motions = [sample.arm_motion_peak for sample in samples]
-        available = [motion for motion in motions if motion is not None]
-        if len(available) < 3:
+        evidence = [
+            self._contact_evidence(previous, current)
+            for previous, current in pairwise(samples)
+        ]
+        contacts = [
+            any(value is True for value in (item.first_head, item.first_torso, item.second_head, item.second_torso))
+            for item in evidence
+            if any(
+                value is not None
+                for value in (
+                    item.first_head,
+                    item.first_torso,
+                    item.second_head,
+                    item.second_torso,
+                )
+            )
+        ]
+        if len(contacts) < 2:
             return None
         peaks = 0
         was_high = False
-        for sample in samples:
-            motion = sample.arm_motion_peak
-            if motion is None:
+        for is_high in contacts:
+            if is_high is None:
                 continue
-            proximity = _finite_min(
-                [sample.wrist_to_head_distance, sample.wrist_to_torso_distance]
-            )
-            is_high = (
-                motion >= self.config.aggressive_arm_speed_threshold
-                and proximity is not None
-                and proximity <= self.config.contact_distance_threshold
-            )
             if is_high and not was_high:
                 peaks += 1
             was_high = is_high
         return peaks >= self.config.repeated_motion_min_peaks
 
-    def _wrist_to_points(
-        self, origin: _TrackSample, target: _TrackSample, target_names: frozenset[str]
-    ) -> float | None:
-        wrists = [
-            point
+    def _wrist_target_samples(
+        self, origin: _TrackSample, target: _TrackSample
+    ) -> tuple[_WristTargetSample, ...]:
+        scale = safe_mean((origin.body_scale, target.body_scale))
+        if scale is None or scale <= 0.0:
+            return ()
+        heads = [point for name, point in target.global_points.items() if name in HEAD_KEYPOINTS]
+        torso = [point for name, point in target.global_points.items() if name in TORSO_KEYPOINTS]
+        return tuple(
+            _WristTargetSample(
+                name=name,
+                motion=origin.wrist_motion.get(name),
+                head_distance=self._point_to_targets(point, heads, scale),
+                torso_distance=self._point_to_targets(point, torso, scale),
+            )
             for name, point in origin.global_points.items()
-            if name in {"left_wrist", "right_wrist"}
-        ]
-        targets = [point for name, point in target.global_points.items() if name in target_names]
-        scale = safe_mean((origin.height, target.height))
-        if not wrists or not targets or scale is None or scale <= 0.0:
+            if name in WRIST_KEYPOINTS
+        )
+
+    def _scale_compatible(
+        self, first: _TrackSample, second: _TrackSample
+    ) -> bool | None:
+        """Compare only homologous skeleton segments, never cropped bounding-box height."""
+
+        ratios = {
+            name: min(first_value, second.pose_scales[name])
+            / max(first_value, second.pose_scales[name])
+            for name, first_value in first.pose_scales.items()
+            if name in second.pose_scales
+        }
+        if not ratios:
             return None
+        threshold = self.config.interaction_scale_ratio_threshold
+        # Torso and shoulder measurements remain useful when legs or half the box are cropped.
+        if any(ratios.get(name, 0.0) >= threshold for name in ("shoulder_width", "torso_length")):
+            return True
+        limb_ratios = [
+            value
+            for name, value in ratios.items()
+            if name not in {"shoulder_width", "torso_length", "hip_width"}
+        ]
+        if len(limb_ratios) >= 2:
+            return median(limb_ratios) >= threshold
+        if "hip_width" in ratios:
+            return ratios["hip_width"] >= threshold
+        return None
+
+    @staticmethod
+    def _point_to_targets(point: Point, targets: list[Point], scale: float) -> float | None:
         distances = [
             distance / scale
-            for wrist in wrists
-            for point in targets
-            if (distance := euclidean_distance(wrist, point)) is not None
+            for target in targets
+            if (distance := euclidean_distance(point, target)) is not None
         ]
         return min(distances) if distances else None
 

@@ -62,6 +62,23 @@ def _interaction_json(interaction: InteractionFeatures) -> dict[str, Any]:
     overlap = _number(interaction.bbox_overlap, "bbox_overlap")
     if overlap is not None and overlap > 1:
         raise WorldStatePayloadError("bbox_overlap must be between 0 and 1")
+    if interaction.repeated_aggressive_motion is True:
+        evidence_level = "REPEATED_STRIKES"
+    elif interaction.possible_contact is True:
+        evidence_level = "SINGLE_HEAD_STRIKE"
+    elif interaction.rapid_approach is True:
+        evidence_level = "APPROACH_ONLY"
+    elif any(
+        value is False
+        for value in (
+            interaction.rapid_approach,
+            interaction.possible_contact,
+            interaction.repeated_aggressive_motion,
+        )
+    ):
+        evidence_level = "NONE_OR_NEGATIVE"
+    else:
+        evidence_level = "UNKNOWN"
     return {
         "first_track_id": interaction.first_track_id,
         "second_track_id": interaction.second_track_id,
@@ -69,17 +86,17 @@ def _interaction_json(interaction: InteractionFeatures) -> dict[str, Any]:
             interaction.distance_between_people, "distance_between_people"
         ),
         "rapid_approach": interaction.rapid_approach,
-        # The current feature implementation calculates these in one direction.
-        "first_wrist_to_second_head_distance_body_heights": _number(
+        "minimum_cross_person_wrist_to_head_distance_body_heights": _number(
             interaction.wrist_to_head_distance, "wrist_to_head_distance"
         ),
-        "first_wrist_to_second_torso_distance_body_heights": _number(
+        "minimum_cross_person_wrist_to_torso_distance_body_heights": _number(
             interaction.wrist_to_torso_distance, "wrist_to_torso_distance"
         ),
         "bounding_box_iou": overlap,
         "possible_contact": interaction.possible_contact,
         "interaction_duration_ms": duration,
         "repeated_aggressive_motion": interaction.repeated_aggressive_motion,
+        "pairwise_evidence_level": evidence_level,
     }
 
 
@@ -142,15 +159,54 @@ def world_state_to_json(world_state: WorldState) -> dict[str, Any]:
             "null": "unknown_or_not_computable; never assume zero or false",
             "temporal_aggregation": (
                 "motion values are recent peaks; interaction distances are recent minima except "
-                "distance_between_people, which is current"
+                "distance_between_people, which is current; separate peak/minimum fields are not "
+                "necessarily simultaneous and must not be combined into an inferred strike"
             ),
-            "distances": "normalized by body/bounding-box scale; smaller means closer",
+            "distances": "normalized by skeleton-derived body scale; smaller means closer",
             "cross_person_wrist_distances": (
                 "minimum of first-to-second and second-to-first directions"
             ),
             "speeds": "normalized body heights per second",
             "acceleration": "normalized body heights per second squared; may be negative",
             "bounding_box_iou": "0 means no overlap; 1 means complete overlap",
+            "possible_contact": (
+                "true only for a directionally correlated fast wrist approach reaching the head, "
+                "or repeated high-energy entries toward the torso; one smooth torso reach is "
+                "ambiguous and proximity alone is false"
+            ),
+            "unpaired_arm_motion": (
+                "person-level arm speed or acceleration can be exercise, gesturing, or movement "
+                "away from others; regardless of magnitude it is not aggression without "
+                "pairwise possible_contact, repeated_aggressive_motion, or rapid_approach"
+            ),
+            "pair_admission": (
+                "interactions are emitted only after both tracks stabilize and comparable torso, "
+                "shoulder, hip, or limb segments indicate a similar apparent scene depth; cropped "
+                "bounding-box height is never used for this decision"
+            ),
+            "hug_pattern": (
+                "one smooth simultaneous two-sided reach toward the torsos is not marked as "
+                "possible_contact; without head contact, repetition, fall, or instability it is "
+                "compatible with a hug"
+            ),
+            "rapid_approach": (
+                "closing body distance is contextual evidence only; by itself it may be a hug, "
+                "greeting, passing movement, or camera projection"
+            ),
+            "pairwise_evidence_level": (
+                "deterministic summary: NONE_OR_NEGATIVE and APPROACH_ONLY do not establish "
+                "violence; SINGLE_HEAD_STRIKE is one high-speed directionally correlated head "
+                "strike and can establish a one-sided assault without repetition; "
+                "REPEATED_STRIKES is the strongest pairwise motion evidence"
+            ),
+            "person_fallen": (
+                "current 2D pose appears horizontal; it does not prove another person caused "
+                "the fall and requires temporal interaction evidence for a violence inference"
+            ),
+            "negative_evidence": (
+                "small distance, bounding-box overlap, long proximity, or low/static motion "
+                "alone are ordinary non-violent observations"
+            ),
             "booleans": "deterministic evidence flags, not final incident judgments",
         },
         "people": [_person_json(person) for person in people],

@@ -22,8 +22,10 @@ As medidas usam a altura corporal/bounding box como escala sempre que possível:
 - duração da proximidade e movimento agressivo repetido.
 
 Os sinais booleanos `rapid_approach`, `possible_contact` e `repeated_aggressive_motion` são
-calculados com os limiares iniciais de `FeatureConfig`. Eles são evidências objetivas para o Jev,
-não um veredito de violência.
+calculados com os limiares iniciais de `FeatureConfig`. `possible_contact` só fica verdadeiro
+quando uma distância de punho à cabeça/torso está abaixo do limiar **e** há movimento rápido do
+braço na mesma amostra; proximidade ou sobreposição de boxes sem movimento não é contato provável.
+Todos esses sinais são evidências objetivas para o Jev, não um veredito de violência.
 
 ## Unidades e dados ausentes
 
